@@ -8,12 +8,16 @@ export enum ResponseFormat {
   JSON = "json",
 }
 
-/** Reusable Zod field for the optional `response_format` parameter. */
+/**
+ * Deprecated `response_format` parameter, still accepted so existing callers
+ * do not break. The text content is always markdown; the full object is in
+ * `structuredContent` (described by each tool's outputSchema).
+ */
 export const responseFormatField = z
   .nativeEnum(ResponseFormat)
   .default(ResponseFormat.MARKDOWN)
   .describe(
-    "Output format: 'markdown' for a human-readable summary (default) or 'json' for the full structured object.",
+    "Deprecated and ignored: the text is always markdown and the full object is always in structuredContent.",
   );
 
 /** Reusable Zod field for an optional market/locale. */
@@ -34,16 +38,16 @@ export interface ToolSuccess {
 
 /**
  * Build a tool result. `text` is the human/markdown rendering; `structured`
- * is the machine-readable object exposed via structuredContent (and as JSON
- * when response_format === json). Applies the character limit to the text.
+ * is the machine-readable object exposed via structuredContent (validated
+ * against the tool's outputSchema). Applies the character limit to the text.
+ * The object is not repeated as JSON text, so clients never receive it twice.
  */
 export function buildResult(
   text: string,
   structured: Record<string, unknown>,
-  format: ResponseFormat,
+  _format?: ResponseFormat,
 ): ToolSuccess {
-  const body =
-    format === ResponseFormat.JSON ? JSON.stringify(structured, null, 2) : text;
+  const body = text;
   const limited =
     body.length > CHARACTER_LIMIT
       ? body.slice(0, CHARACTER_LIMIT) +

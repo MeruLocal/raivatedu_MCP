@@ -295,3 +295,76 @@ export function extractSoftware(jsonLdBlocks: unknown[]): SoftwareInfo | null {
   }
   return null;
 }
+
+export interface TrialTerms {
+  text: string;
+  source: "json-ld" | "faq";
+}
+
+const TRIAL = /\btrial\b/i;
+
+function durationText(value: unknown): string {
+  if (!value || typeof value !== "object") return clean(value as string);
+  const d = value as Record<string, unknown>;
+  const amount = num(d["value"]);
+  const unitCode = clean(d["unitCode"] as string).toUpperCase();
+  const unitText = clean(d["unitText"] as string);
+  const unit =
+    unitText ||
+    ({ DAY: "days", WEE: "weeks", MON: "months", ANN: "years" } as Record<string, string>)[
+      unitCode
+    ] ||
+    unitCode.toLowerCase();
+  return amount !== undefined ? `${amount} ${unit}`.trim() : "";
+}
+
+/**
+ * Free-trial terms as the page's structured data states them, or null.
+ * Order: an Offer / PriceSpecification whose description (or, for
+ * eligibleDuration, whose name or description) mentions a trial; then a
+ * FAQPage entry about a free trial. Nothing is inferred beyond that.
+ */
+export function extractTrialTerms(jsonLdBlocks: unknown[]): TrialTerms | null {
+  const nodes = flattenJsonLd(jsonLdBlocks);
+  const candidates: Record<string, unknown>[] = [];
+  for (const node of nodes) {
+    const offers = node["offers"];
+    const list = Array.isArray(offers) ? offers : offers ? [offers] : [];
+    for (const o of list) {
+      if (!o || typeof o !== "object") continue;
+      candidates.push(o as Record<string, unknown>);
+      const spec = (o as Record<string, unknown>)["priceSpecification"];
+      if (spec && typeof spec === "object") candidates.push(spec as Record<string, unknown>);
+    }
+    if (hasType(node, "Offer") || hasType(node, "UnitPriceSpecification")) candidates.push(node);
+  }
+  for (const c of candidates) {
+    const description = clean(c["description"] as string);
+    const name = clean(c["name"] as string);
+    if (description && TRIAL.test(description)) {
+      return { text: description, source: "json-ld" };
+    }
+    const duration = durationText(c["eligibleDuration"]);
+    if (duration && (TRIAL.test(name) || TRIAL.test(description))) {
+      return { text: `${name || "Trial"}: ${duration}`, source: "json-ld" };
+    }
+  }
+  for (const faq of extractFaqs(jsonLdBlocks)) {
+    if (/free trial/i.test(faq.question) || /free trial/i.test(faq.answer)) {
+      const text = faq.answer || faq.question;
+      if (text) return { text, source: "faq" };
+    }
+  }
+  return null;
+}
+
+/**
+ * The single priceCurrency every offer shares, or undefined when there are
+ * no offers or they disagree (callers then fall back to the market map).
+ */
+export function offersCurrency(offers: PricingOffer[]): string | undefined {
+  const set = new Set(offers.map((o) => o.currency).filter(Boolean));
+  if (offers.length === 0 || set.size !== 1) return undefined;
+  if (offers.some((o) => !o.currency)) return undefined;
+  return [...set][0];
+}

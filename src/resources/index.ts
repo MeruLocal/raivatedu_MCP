@@ -18,8 +18,10 @@ import {
   extractOrganization,
   extractPricing,
   extractSoftware,
+  offersCurrency,
   parsePage,
 } from "../services/content-parser.js";
+import { withUtm } from "../utils/utm.js";
 
 function jsonContents(uri: URL, data: unknown) {
   return {
@@ -63,7 +65,7 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
           code,
           name: MARKET_INFO[code].name,
           currency: MARKET_INFO[code].currency,
-          url: `${SITE_ORIGIN}/${code}`,
+          url: withUtm(`${SITE_ORIGIN}/${code}`, "raivatedu-info"),
         })),
       });
     },
@@ -84,8 +86,8 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
       return jsonContents(uri, {
         general_email: org?.email ?? null,
         contact_points: org?.contactPoints ?? [],
-        contact_page: `${SITE_ORIGIN}/${m}/contact`,
-        demo_page: `${SITE_ORIGIN}/${m}/demo`,
+        contact_page: withUtm(`${SITE_ORIGIN}/${m}/contact`, "raivatedu-contact"),
+        demo_page: withUtm(`${SITE_ORIGIN}/${m}/demo`, "raivatedu-contact"),
       });
     },
   );
@@ -113,7 +115,11 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
       return jsonContents(uri, {
         market: m,
         count: pages.length,
-        pages: pages.map((p) => ({ path: p.path, url: p.url, type: p.type })),
+        pages: pages.map((p) => ({
+          path: p.path,
+          url: withUtm(p.url, "raivatedu-pages"),
+          type: p.type,
+        })),
       });
     },
   );
@@ -138,10 +144,12 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
     async (uri, variables) => {
       const m = marketParam(variables.market);
       const { body } = await ctx.client.get(`${SITE_ORIGIN}/${m}/pricing`);
+      const plans = extractPricing(parsePage(body).jsonLd);
       return jsonContents(uri, {
         market: m,
-        currency: MARKET_INFO[m].currency,
-        plans: extractPricing(parsePage(body).jsonLd),
+        // The offers' own priceCurrency; the market map only as a fallback.
+        currency: offersCurrency(plans) ?? MARKET_INFO[m].currency,
+        plans,
       });
     },
   );

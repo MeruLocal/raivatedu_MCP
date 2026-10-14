@@ -1,4 +1,4 @@
-/** Tools: check_website_status, get_website_info, get_contact_information. */
+/** Tools: check_website_status, get_website_info, get_contact_information, get_started. */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ServerContext } from "../context.js";
@@ -10,11 +10,17 @@ import {
   parsePage,
 } from "../services/content-parser.js";
 import {
-  ResponseFormat,
   buildResult,
   marketField,
   responseFormatField,
 } from "./shared.js";
+import { withUtm } from "../utils/utm.js";
+import {
+  contactOutput,
+  getStartedOutput,
+  statusOutput,
+  websiteInfoOutput,
+} from "./schemas.js";
 
 const READONLY = {
   readOnlyHint: true,
@@ -37,15 +43,12 @@ export function registerWebsiteTools(server: McpServer, ctx: ServerContext): voi
 Performs a single HTTP HEAD request to a market home page and reports the status code and round-trip time. Use this to confirm the site is up before running other tools, or to diagnose failures.
 
 Args:
-  - market (optional): locale to probe (${MARKETS.join(", ")}); defaults to the configured market.
-  - response_format ('markdown' | 'json'): output format (default markdown).
-
-Returns JSON shape:
-  { "reachable": boolean, "status": number, "url": string, "response_time_ms": number, "checked_at": string }`,
+  - market (optional): locale to probe (${MARKETS.join(", ")}); defaults to the configured market.`,
       inputSchema: { market: marketField, response_format: responseFormatField },
+      outputSchema: statusOutput,
       annotations: READONLY,
     },
-    async ({ market, response_format }) => {
+    async ({ market }) => {
       try {
         const m = resolveMarket(ctx, market);
         const url = `${SITE_ORIGIN}/${m}`;
@@ -60,7 +63,7 @@ Returns JSON shape:
         const text = res.ok
           ? `✅ RaivatEdu is reachable.\n- URL: ${res.url}\n- HTTP status: ${res.status}\n- Response time: ${res.elapsedMs} ms`
           : `⚠️ RaivatEdu responded but not with success.\n- URL: ${res.url}\n- HTTP status: ${res.status}\n- Response time: ${res.elapsedMs} ms`;
-        return buildResult(text, structured, response_format);
+        return buildResult(text, structured);
       } catch (err) {
         return toToolError(err);
       }
@@ -76,20 +79,12 @@ Returns JSON shape:
 Data is read from the schema.org JSON-LD (Organization + SoftwareApplication + WebSite) embedded in the site, so it reflects the site's own published description rather than any assumption.
 
 Args:
-  - market (optional): locale whose home page to read (${MARKETS.join(", ")}); defaults to the configured market.
-  - response_format ('markdown' | 'json'): output format (default markdown).
-
-Returns JSON shape:
-  {
-    "product": { "name", "description", "applicationCategory", "applicationSubCategory", "operatingSystem" },
-    "organization": { "name", "url", "email", "description", "logo" },
-    "markets": [ { "code", "name", "currency", "url" } ],
-    "source_url": string
-  }`,
+  - market (optional): locale whose home page to read (${MARKETS.join(", ")}); defaults to the configured market.`,
       inputSchema: { market: marketField, response_format: responseFormatField },
+      outputSchema: websiteInfoOutput,
       annotations: READONLY,
     },
-    async ({ market, response_format }) => {
+    async ({ market }) => {
       try {
         const m = resolveMarket(ctx, market);
         const url = `${SITE_ORIGIN}/${m}`;
@@ -102,7 +97,7 @@ Returns JSON shape:
           code,
           name: MARKET_INFO[code].name,
           currency: MARKET_INFO[code].currency,
-          url: `${SITE_ORIGIN}/${code}`,
+          url: withUtm(`${SITE_ORIGIN}/${code}`, "raivatedu_get_website_info"),
         }));
 
         const structured = {
@@ -143,7 +138,7 @@ Returns JSON shape:
           "",
           `_Source: ${url}_`,
         ];
-        return buildResult(lines.join("\n"), structured, response_format);
+        return buildResult(lines.join("\n"), structured);
       } catch (err) {
         return toToolError(err);
       }
@@ -159,20 +154,12 @@ Returns JSON shape:
 Email addresses come from the Organization JSON-LD contact points (the site's own machine-readable contact data). This tool does NOT submit forms or send messages — it only reads published contact details.
 
 Args:
-  - market (optional): locale used for the contact/demo page URLs (${MARKETS.join(", ")}); defaults to the configured market.
-  - response_format ('markdown' | 'json'): output format (default markdown).
-
-Returns JSON shape:
-  {
-    "general_email": string | null,
-    "contact_points": [ { "type": string, "email": string | null, "telephone": string | null } ],
-    "contact_page": string,
-    "demo_page": string
-  }`,
+  - market (optional): locale used for the contact/demo page URLs (${MARKETS.join(", ")}); defaults to the configured market.`,
       inputSchema: { market: marketField, response_format: responseFormatField },
+      outputSchema: contactOutput,
       annotations: READONLY,
     },
-    async ({ market, response_format }) => {
+    async ({ market }) => {
       try {
         const m = resolveMarket(ctx, market);
         const url = `${SITE_ORIGIN}/${m}`;
@@ -188,8 +175,14 @@ Returns JSON shape:
               email: c.email ?? null,
               telephone: c.telephone ?? null,
             })) ?? [],
-          contact_page: `${SITE_ORIGIN}/${m}/contact`,
-          demo_page: `${SITE_ORIGIN}/${m}/demo`,
+          contact_page: withUtm(
+            `${SITE_ORIGIN}/${m}/contact`,
+            "raivatedu_get_contact_information",
+          ),
+          demo_page: withUtm(
+            `${SITE_ORIGIN}/${m}/demo`,
+            "raivatedu_get_contact_information",
+          ),
         };
 
         const lines = [
@@ -206,7 +199,53 @@ Returns JSON shape:
           "",
           "_To actually send a message or book a demo, open the pages above in a browser._",
         ];
-        return buildResult(lines.join("\n"), structured, response_format);
+        return buildResult(lines.join("\n"), structured);
+      } catch (err) {
+        return toToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "raivatedu_get_started",
+    {
+      title: "Get Started with RaivatEdu",
+      description: `Give the next step for someone who wants to try or buy RaivatEdu: the demo, contact and pricing page links for a market, ready to hand to the user.
+
+Needs no network call. No self-serve signup page is published in the site's sitemap, so signup_url is always null; the demo or contact page is the way to start. For plan prices, call raivatedu_get_pricing.
+
+Args:
+  - market (optional): locale for the links (${MARKETS.join(", ")}); defaults to the configured market.`,
+      inputSchema: { market: marketField },
+      outputSchema: getStartedOutput,
+      annotations: { ...READONLY, openWorldHint: false },
+    },
+    async ({ market }) => {
+      try {
+        const m = resolveMarket(ctx, market);
+        const tag = (path: string) =>
+          withUtm(`${SITE_ORIGIN}/${m}/${path}`, "raivatedu_get_started");
+        const structured = {
+          market: m,
+          demo_url: tag("demo"),
+          contact_url: tag("contact"),
+          pricing_url: tag("pricing"),
+          signup_url: null,
+          note: "No self-serve signup page is published in the sitemap; use the demo or contact page.",
+          call_to_action: "Book a demo or contact sales to start a trial.",
+        };
+        const lines = [
+          `# Get started with RaivatEdu (${m.toUpperCase()})`,
+          "",
+          structured.call_to_action,
+          "",
+          `- Book a demo: ${structured.demo_url}`,
+          `- Contact sales: ${structured.contact_url}`,
+          `- Plans and prices: ${structured.pricing_url}`,
+          "",
+          `_${structured.note}_`,
+        ];
+        return buildResult(lines.join("\n"), structured);
       } catch (err) {
         return toToolError(err);
       }

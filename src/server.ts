@@ -30,7 +30,11 @@ export function createServer(
   const context: ServerContext = { config, client, logger };
 
   const server = new McpServer(
-    { name: SERVER_NAME, version: SERVER_VERSION },
+    {
+      name: SERVER_NAME,
+      version: SERVER_VERSION,
+      websiteUrl: "https://www.raivatedu.com",
+    },
     {
       instructions:
         "Tools for exploring the public RaivatEdu education-software website " +
