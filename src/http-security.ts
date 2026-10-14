@@ -42,7 +42,8 @@ export interface HttpSecurityConfig {
   /** Requests per minute per client IP; 0 turns the limit off. */
   rateLimitPerMin: number;
   /** Trust the right-most X-Forwarded-For hop (set behind a proxy). */
-  trustProxy: boolean;
+  /** Number of trusted proxy hops (0 = use the socket address). */
+  trustProxy: number;
 }
 
 function list(raw: string | undefined, fallback: string[]): string[] {
@@ -66,7 +67,7 @@ export function loadHttpSecurityConfig(
       Number.isFinite(rawLimit) && rawLimit >= 0
         ? Math.min(rawLimit, 100000)
         : DEFAULT_RATE_LIMIT_PER_MIN,
-    trustProxy: /^(1|true|yes)$/i.test(env.TRUST_PROXY?.trim() ?? ""),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
   };
 }
 
@@ -93,15 +94,22 @@ export function originCheck(allowedOrigins: string[]): RequestHandler {
   };
 }
 
+export function parseTrustProxy(v: string | undefined): number {
+  const t = (v ?? "").trim().toLowerCase();
+  if (t === "true" || t === "yes") return 1;
+  const n = Number.parseInt(t, 10);
+  return Number.isFinite(n) && n > 0 && /^\d+$/.test(t) ? n : 0;
+}
+
 /** The key a request is rate-limited by. */
-export function clientKey(req: Request, trustProxy: boolean): string {
-  if (trustProxy) {
+export function clientKey(req: Request, trustProxy: number): string {
+  if (trustProxy > 0) {
     const xff = req.headers["x-forwarded-for"];
     const raw = Array.isArray(xff) ? xff.join(",") : xff;
     if (raw) {
       const hops = raw.split(",").map((s) => s.trim()).filter(Boolean);
-      const last = hops[hops.length - 1];
-      if (last) return last;
+      const idx = hops.length - trustProxy;
+      if (idx >= 0 && hops[idx]) return hops[idx];
     }
   }
   return req.socket.remoteAddress ?? "unknown";
@@ -112,7 +120,7 @@ const MAX_TRACKED_KEYS = 10000;
 /** Fixed one-minute window per client key. */
 export function rateLimit(
   perMinute: number,
-  trustProxy: boolean,
+  trustProxy: number,
   now: () => number = Date.now,
 ): RequestHandler {
   const windows = new Map<string, { start: number; count: number }>();

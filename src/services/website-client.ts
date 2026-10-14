@@ -17,6 +17,7 @@
 
 import type { RuntimeConfig } from "../config.js";
 import { WebsiteClientError } from "../utils/errors.js";
+import { lookupPath } from "../utils/url.js";
 import type { Logger } from "../utils/logger.js";
 import { ALLOWED_HOSTS, DISALLOWED_PATH_PREFIXES } from "../config.js";
 
@@ -146,6 +147,12 @@ export class WebsiteClient {
     if (isBlockedPath(next.pathname)) {
       throw new WebsiteClientError(
         "Refused a redirect to a path blocked by robots.txt (/api/).",
+        { url: from },
+      );
+    }
+    if (!lookupPath(next.pathname)) {
+      throw new WebsiteClientError(
+        "Refused a redirect to a page outside the catalog.",
         { url: from },
       );
     }
