@@ -14,11 +14,15 @@ Measured against a local `node dist/index.js --http` build of main @ d64497c:
 | Host validation / DNS-rebinding protection | none: `src/http.ts:129` builds the transport without `allowedHosts`, `allowedOrigins` or validation middleware |
 | Rate limit | none on `/mcp` |
 | Body cap | `express.json({ limit: "1mb" })` exists (`src/http.ts:107`), but oversized or malformed bodies fall through to Express's default **HTML** error handler, not a JSON-RPC error |
+| Error body leak (re-audit 2026-10-14) | with `NODE_ENV` unset, a 1.2 MB body and `{bad` both return Express's HTML error page **with the stack trace and absolute `node_modules` paths of the deploy directory**. The Dockerfile sets `NODE_ENV=production`, which hides the stack; a plain `node dist/index.js --http` deploy does not. The audit script's `X.body_cap` PASSes on the 413 status alone, so it does not catch this |
+| Outbound response size (re-audit 2026-10-14) | `website-client.ts:158` reads `await res.text()` with no length or content-type guard, so one tool call buffers whatever the origin (or a redirect target) sends |
 | Redirects | `src/services/website-client.ts:85` uses `redirect: "follow"` and checks the host only **after** the chain completes (`:97`), so an off-domain hop is already fetched before it is rejected |
 
 `README.md:343` claims "redirects are re-validated against the allowlist". That is only true after the fact.
 
-**Not checked:** the production proxy setup (Cloudflare and Apache headers), and the live site's redirect behaviour.
+**Re-audit 2026-10-14** (new `audit-live-mcp.mjs`, local build of main @ d64497c): `FAIL X.rebinding` for both a foreign Origin and a foreign Host, `WARN X.rate_limit` (no 429 in 70 requests). This plan clears all three.
+
+**Not checked:** how production is started (Docker with `NODE_ENV=production` or not), the production proxy setup (Cloudflare and Apache headers), and the live site's redirect behaviour.
 
 ## Proposed fix
 
@@ -39,7 +43,8 @@ Measured against a local `node dist/index.js --http` build of main @ d64497c:
    - a path that is not `/api` or `/api/...`
 
    Otherwise throw a `WebsiteClientError` without fetching the target. Cancel the body of each 3xx response.
-5. Correct the README security section to match.
+5. **Outbound response cap (added by re-audit 2026-10-14):** in `get()`, reject a `Content-Length` above `RAIVATEDU_MAX_RESPONSE_BYTES` (default 2 MB) before reading, and read the body as a stream that aborts past the same limit (servers can omit or lie about the header). Accept only `text/html`, `application/xhtml+xml` and `*/xml` content types. Both throw a non-retryable `WebsiteClientError`.
+6. Correct the README security section to match.
 
 ## Tests to add (`tests/http-security.test.ts`, with a throwaway express app and `fetch`)
 
@@ -48,6 +53,8 @@ Measured against a local `node dist/index.js --http` build of main @ d64497c:
 - With a limit of 3 per minute, a 4th request gets 429 with `Retry-After`.
 - With `TRUST_PROXY=1`, a spoofed left-most XFF hop does not get a fresh bucket.
 - A 1.1 MB body gets a JSON 413. A thrown error gets a generic 500 that does not contain the internal message.
+- The 413 and 400 bodies contain no `at `, `node_modules` or absolute path, with `NODE_ENV` unset (re-audit 2026-10-14).
+- A 3 MB response, and a response with no `Content-Length` that streams past 2 MB, both throw without buffering it all; an `image/png` response is refused.
 - Redirects:
   - an off-domain target makes exactly 1 fetch and throws, with `redirect: "manual"` asserted
   - `http://` and `/api/` targets are refused
