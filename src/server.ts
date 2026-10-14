@@ -24,10 +24,11 @@ export interface BuiltServer {
 export function createServer(
   config: RuntimeConfig,
   client?: WebsiteClient,
+  transport: "stdio" | "http" = "stdio",
 ): BuiltServer {
   const logger = createLogger(config);
   client ??= new WebsiteClient(config, logger);
-  const context: ServerContext = { config, client, logger };
+  const context: ServerContext = { config, client, logger, transport };
 
   const server = new McpServer(
     {

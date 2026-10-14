@@ -11,16 +11,24 @@ export class WebsiteClientError extends Error {
   readonly status?: number;
   readonly url?: string;
   readonly retryable: boolean;
+  /** True when the request was aborted by the client's timeout. */
+  readonly timedOut: boolean;
 
   constructor(
     message: string,
-    opts: { status?: number; url?: string; retryable?: boolean } = {},
+    opts: {
+      status?: number;
+      url?: string;
+      retryable?: boolean;
+      timedOut?: boolean;
+    } = {},
   ) {
     super(message);
     this.name = "WebsiteClientError";
     this.status = opts.status;
     this.url = opts.url;
     this.retryable = opts.retryable ?? false;
+    this.timedOut = opts.timedOut ?? false;
   }
 }
 
@@ -38,6 +46,24 @@ export interface ToolErrorResult {
   [key: string]: unknown;
   content: { type: "text"; text: string }[];
   isError: true;
+}
+
+/** Closed set of error kinds, derived from the error class (never its text). */
+export type ErrorKind = "validation" | "upstream" | "timeout" | "internal";
+
+export function errorKindOf(error: unknown): ErrorKind {
+  if (error instanceof ValidationError) return "validation";
+  if (error instanceof WebsiteClientError) {
+    return error.timedOut ? "timeout" : "upstream";
+  }
+  return "internal";
+}
+
+/** Error kind of each result built by toToolError (read by usage logging). */
+const resultKinds = new WeakMap<object, ErrorKind>();
+
+export function errorKindOfResult(result: object): ErrorKind | undefined {
+  return resultKinds.get(result);
 }
 
 /** Build a standard MCP error result from any thrown value. */
@@ -60,5 +86,7 @@ export function toToolError(error: unknown): ToolErrorResult {
     text = `Unexpected error: ${String(error)}`;
   }
 
-  return { content: [{ type: "text", text }], isError: true };
+  const result: ToolErrorResult = { content: [{ type: "text", text }], isError: true };
+  resultKinds.set(result, errorKindOf(error));
+  return result;
 }

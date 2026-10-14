@@ -244,7 +244,7 @@ export function createHttpApp(
   // MCP endpoint — stateless: build a fresh server + transport per request.
   // Served at /mcp (the advertised MCP endpoint).
   const handleMcp = async (req: Request, res: Response): Promise<void> => {
-    const { server } = createServer(config, client);
+    const { server } = createServer(config, client, "http");
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
