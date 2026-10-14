@@ -288,7 +288,7 @@ All optional; the server runs with zero config. See `.env.example`.
 | `MCP_ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1],mcp.raivatedu.com` | HTTP only: Host allowlist for `/mcp`. |
 | `MCP_ALLOWED_ORIGINS` | `https://mcp.raivatedu.com,https://raivatedu.com,https://www.raivatedu.com` | HTTP only: browser origins allowed on `/mcp`. |
 | `MCP_RATE_LIMIT_PER_MIN` | `60` | HTTP only: requests per minute per IP (0 = off). |
-| `TRUST_PROXY` | unset | HTTP only: `1` behind Cloudflare/Apache (rate limit keys on the right-most `X-Forwarded-For` hop). |
+| `TRUST_PROXY` | `0` | HTTP only: number of trusted proxy hops (0 = socket address; `true`/`1` = 1). The rate limit keys on the `X-Forwarded-For` entry that many hops from the right. Behind Cloudflare then Apache use `2`, or configure Apache `mod_remoteip` with Cloudflare's ranges and use `1`. `CF-Connecting-IP` is not trusted. |
 
 ---
 
@@ -350,7 +350,7 @@ Once connected in Claude Desktop you can ask:
 
 - **Read-only.** No tool writes, submits forms, sends messages, or authenticates. Contact tools only surface already-public email addresses.
 - **SSRF prevention.** Outbound fetches are restricted to `raivatedu.com`/`www.raivatedu.com` over HTTP(S), and only to paths in the verified sitemap-derived allowlist. Full URLs are parsed and host-checked. Redirects are followed manually (at most 5 hops) and each `Location` is checked **before** it is fetched: HTTPS only, an allowed host, never `/api/`. Responses are capped at 2 MB (declared or streamed) and must be HTML or XML. Arbitrary/internal/external URLs are refused.
-- **HTTP endpoint guards.** `POST /mcp` checks the `Host` header (`MCP_ALLOWED_HOSTS`) and the browser `Origin` (`MCP_ALLOWED_ORIGINS`; no Origin and localhost pass), rate-limits each client IP (`MCP_RATE_LIMIT_PER_MIN`, default 60; set `TRUST_PROXY=1` behind a proxy), and answers oversized or malformed bodies with JSON errors that carry no stack trace.
+- **HTTP endpoint guards.** `POST /mcp` checks the `Host` header (`MCP_ALLOWED_HOSTS`) and the browser `Origin` (`MCP_ALLOWED_ORIGINS`; no Origin and localhost pass), rate-limits each client IP (`MCP_RATE_LIMIT_PER_MIN`, default 60; set `TRUST_PROXY` to the number of proxy hops, `2` behind Cloudflare then Apache), and answers oversized or malformed bodies with JSON errors that carry no stack trace.
 - **Load on the website.** One shared client per process caps simultaneous outbound requests (`RAIVATEDU_MAX_CONCURRENT_REQUESTS`) and caches successful pages for 10 minutes (`RAIVATEDU_CACHE_TTL_MS`).
 - **robots.txt respected.** `/api/` is always blocked, matching the site's `Disallow: /api/`.
 - **No access-control bypass.** The server never attempts auth, CAPTCHAs, paywalls, or private areas.

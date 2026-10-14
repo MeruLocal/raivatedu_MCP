@@ -338,9 +338,17 @@ Notes:
 
         if (ok.length === 0 && candidates.length > 0) {
           const first = failures[0];
+          if (first) ctx.logger.warn(`search: all fetches failed: ${first.message}`);
+          const reason = !first
+            ? "site unreachable"
+            : first.status
+              ? `upstream error ${first.status}`
+              : /timed out/i.test(first.message)
+                ? "timed out"
+                : "site unreachable";
           return toToolError(
             new WebsiteClientError(
-              `Could not reach raivatedu.com to search; nothing was searched${first ? ` (${first.message})` : ""}. Retry shortly or call raivatedu_check_website_status.`,
+              `Could not reach raivatedu.com to search; nothing was searched (${reason}). Retry shortly or call raivatedu_check_website_status.`,
               { status: first?.status, retryable: first?.retryable ?? true },
             ),
           );

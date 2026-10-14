@@ -3,7 +3,9 @@ import express from "express";
 import type { AddressInfo } from "node:net";
 import { request as httpRequest, type Server } from "node:http";
 import {
+  clientKey,
   jsonErrorHandler,
+  parseTrustProxy,
   loadHttpSecurityConfig,
   mcpGuards,
   rateLimit,
@@ -95,7 +97,7 @@ describe("loadHttpSecurityConfig", () => {
     expect(c.allowedHosts).toContain("mcp.raivatedu.com");
     expect(c.allowedOrigins).toContain("https://www.raivatedu.com");
     expect(c.rateLimitPerMin).toBe(60);
-    expect(c.trustProxy).toBe(false);
+    expect(c.trustProxy).toBe(0);
   });
   it("reads overrides; 0 turns the limit off", () => {
     const c = loadHttpSecurityConfig({
@@ -105,7 +107,20 @@ describe("loadHttpSecurityConfig", () => {
     });
     expect(c.allowedHosts).toEqual(["a.example", "b.example"]);
     expect(c.rateLimitPerMin).toBe(0);
-    expect(c.trustProxy).toBe(true);
+    expect(c.trustProxy).toBe(1);
+  });
+});
+
+describe("clientKey hop count", () => {
+  const mk = (xff: string | undefined) =>
+    ({ headers: xff ? { "x-forwarded-for": xff } : {}, socket: { remoteAddress: "10.0.0.1" } }) as never;
+  const h = "9.9.9.9, 1.1.1.1, 2.2.2.2";
+  it("0 hops uses the socket address", () => expect(clientKey(mk(h), 0)).toBe("10.0.0.1"));
+  it("1 hop uses the right-most entry", () => expect(clientKey(mk(h), 1)).toBe("2.2.2.2"));
+  it("2 hops uses the second from the right", () => expect(clientKey(mk(h), 2)).toBe("1.1.1.1"));
+  it("a short header falls back to the socket", () => expect(clientKey(mk("2.2.2.2"), 2)).toBe("10.0.0.1"));
+  it("parses TRUST_PROXY", () => {
+    expect([parseTrustProxy("true"), parseTrustProxy("2"), parseTrustProxy("0"), parseTrustProxy("junk"), parseTrustProxy(undefined)]).toEqual([1, 2, 0, 0, 0]);
   });
 });
 
@@ -186,7 +201,7 @@ describe("rate limit", () => {
 
   it("with TRUST_PROXY a spoofed left-most XFF hop does not get a fresh bucket", async () => {
     const { base, server } = await listen(
-      guardedApp({ rateLimitPerMin: 2, trustProxy: true }),
+      guardedApp({ rateLimitPerMin: 2, trustProxy: 1 }),
     );
     try {
       const h = (spoof: string) => ({ "x-forwarded-for": `${spoof}, 203.0.113.7` });

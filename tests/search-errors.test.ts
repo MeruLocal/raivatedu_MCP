@@ -55,6 +55,8 @@ describe("search_content when the site cannot be fetched", () => {
     expect(res.isError).toBe(true);
     expect(text(res)).toMatch(/Could not reach raivatedu.com/);
     expect(text(res)).not.toMatch(/No matching pages/);
+    expect(text(res)).not.toMatch(/fetch failed/);
+    expect(text(res)).toMatch(/site unreachable/);
   });
 
   it("reports partial failures with pages_failed and a note", async () => {
