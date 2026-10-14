@@ -157,7 +157,20 @@ export interface RuntimeConfig {
   maxRetries: number;
   userAgent: string;
   logLevel: "debug" | "info" | "warn" | "error" | "silent";
+  /** How long a successful GET stays cached, in ms. 0 turns the cache off. */
+  cacheTtlMs: number;
+  /** Maximum number of cached pages (least recently used is evicted). */
+  cacheMaxEntries: number;
+  /** Ceiling on simultaneous outbound requests to the website. */
+  maxConcurrentRequests: number;
+  /** Maximum pages one search may fetch. 0 means no cap. */
+  searchMaxPages: number;
+  /** Maximum bytes read from one website response. */
+  maxResponseBytes: number;
 }
+
+/** Search cap applied on the anonymous HTTP transport unless overridden. */
+export const HTTP_DEFAULT_SEARCH_MAX_PAGES = 12;
 
 export const SERVER_NAME = "raivat-education-mcp-server";
 export const SERVER_VERSION = "1.0.0";
@@ -201,5 +214,32 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig 
     maxRetries: clampInt(env.RAIVATEDU_MAX_RETRIES, 2, 0, 5),
     userAgent: env.RAIVATEDU_USER_AGENT?.trim() || DEFAULT_USER_AGENT,
     logLevel,
+    cacheTtlMs: clampInt(env.RAIVATEDU_CACHE_TTL_MS, 600000, 0, 3600000),
+    cacheMaxEntries: clampInt(env.RAIVATEDU_CACHE_MAX_ENTRIES, 500, 1, 10000),
+    maxConcurrentRequests: clampInt(
+      env.RAIVATEDU_MAX_CONCURRENT_REQUESTS,
+      4,
+      1,
+      32,
+    ),
+    searchMaxPages: clampInt(env.RAIVATEDU_SEARCH_MAX_PAGES, 0, 0, 200),
+    maxResponseBytes: clampInt(
+      env.RAIVATEDU_MAX_RESPONSE_BYTES,
+      2 * 1024 * 1024,
+      64 * 1024,
+      16 * 1024 * 1024,
+    ),
   };
+}
+
+/**
+ * Adjust a config for the public HTTP transport, where callers are anonymous:
+ * the search fan-out is capped unless RAIVATEDU_SEARCH_MAX_PAGES is set.
+ */
+export function httpConfig(
+  config: RuntimeConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): RuntimeConfig {
+  if (env.RAIVATEDU_SEARCH_MAX_PAGES?.trim()) return config;
+  return { ...config, searchMaxPages: HTTP_DEFAULT_SEARCH_MAX_PAGES };
 }

@@ -15,10 +15,18 @@ export interface BuiltServer {
   logger: Logger;
 }
 
-/** Create and fully configure (but do not connect) the MCP server. */
-export function createServer(config: RuntimeConfig): BuiltServer {
+/**
+ * Create and fully configure (but do not connect) the MCP server.
+ *
+ * Pass `client` to share one website client (throttle, concurrency cap and
+ * page cache) across servers; the HTTP transport builds a server per request.
+ */
+export function createServer(
+  config: RuntimeConfig,
+  client?: WebsiteClient,
+): BuiltServer {
   const logger = createLogger(config);
-  const client = new WebsiteClient(config, logger);
+  client ??= new WebsiteClient(config, logger);
   const context: ServerContext = { config, client, logger };
 
   const server = new McpServer(
