@@ -83,6 +83,16 @@ describe("raivatedu_get_started", () => {
     expect(d.signup_url).toBeNull();
     expect(f).not.toHaveBeenCalled();
   });
+
+  it("never mentions a trial anywhere in its output", async () => {
+    installFetchMock();
+    const client = await makeClient();
+    const res = await client.callTool({ name: "raivatedu_get_started", arguments: { market: "us" } });
+    expect(JSON.stringify(res)).not.toMatch(/trial/i);
+    expect((res.structuredContent as { call_to_action: string }).call_to_action).toBe(
+      "Book a demo or contact sales.",
+    );
+  });
 });
 
 describe("UTM tags in tool output", () => {
