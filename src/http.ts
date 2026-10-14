@@ -57,19 +57,19 @@ function statusPage(): string {
 
   <p>Read-only RaivatEdu website mirror (product knowledge: pricing, features,
   solutions, resources, comparisons) plus site navigation and reachability tools.
-  Connect via the Streamable HTTP endpoint at <code>/sse</code>. No API key is
+  Connect via the Streamable HTTP endpoint at <code>/mcp</code>. No API key is
   required &mdash; this server holds no customer data and performs no account actions.</p>
 
   <p>Status: <a href="/version">/version</a> &middot; Discovery:
   <a href="/.well-known/mcp.json">/.well-known/mcp.json</a> &middot; Tools:
-  <code>POST /sse</code> &rarr; <code>tools/list</code></p>
+  <code>POST /mcp</code> &rarr; <code>tools/list</code></p>
 
   <p class="fine">This is not a student or admissions API. It holds no customer
   data, performs no account actions, and needs no API key &mdash; never send one here.</p>
 
   <p>Read-only RaivatEdu website mirror (product knowledge: pricing, features,
   solutions, resources, comparisons) plus site navigation and reachability tools.
-  Connect via the Streamable HTTP endpoint at <code>/sse</code>. No API key is
+  Connect via the Streamable HTTP endpoint at <code>/mcp</code>. No API key is
   required, and the public endpoint returns no personal data. This is not an
   admissions API and it performs no account actions &mdash; never send credentials here.</p>
 
@@ -90,7 +90,7 @@ function discoveryDoc(port: number) {
       "Read-only MCP server for the public RaivatEdu education-software website (raivatedu.com).",
     transport: {
       type: "streamable-http",
-      endpoint: `http://localhost:${port}/sse`,
+      endpoint: `http://localhost:${port}/mcp`,
     },
     authentication: "none",
     readOnly: true,
@@ -123,7 +123,7 @@ export async function runHttp(
   });
 
   // MCP endpoint — stateless: build a fresh server + transport per request.
-  // Served at both /sse (advertised) and /mcp (alias) for client compatibility.
+  // Served at /mcp (the advertised MCP endpoint).
   const handleMcp = async (req: Request, res: Response): Promise<void> => {
     const { server } = createServer(config);
     const transport = new StreamableHTTPServerTransport({
@@ -152,11 +152,10 @@ export async function runHttp(
   const methodNotAllowed = (_req: Request, res: Response) =>
     res.status(405).json(JSON_RPC_METHOD_NOT_ALLOWED);
 
-  app.post("/sse", handleMcp);
   app.post("/mcp", handleMcp);
   // Session-based GET/DELETE are not supported in stateless mode.
-  app.get(["/sse", "/mcp"], methodNotAllowed);
-  app.delete(["/sse", "/mcp"], methodNotAllowed);
+  app.get("/mcp", methodNotAllowed);
+  app.delete("/mcp", methodNotAllowed);
 
   await new Promise<void>((resolve, reject) => {
     const httpServer = app.listen(port, () => {
