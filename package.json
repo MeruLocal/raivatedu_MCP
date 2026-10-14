@@ -2,6 +2,14 @@
   "name": "raivat-education-mcp-server",
   "version": "1.0.0",
   "description": "Model Context Protocol (MCP) server that lets AI clients explore the public RaivatEdu education-software marketing website (raivatedu.com).",
+  "homepage": "https://github.com/MeruLocal/raivatedu_MCP#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MeruLocal/raivatedu_MCP.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MeruLocal/raivatedu_MCP/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -24,7 +32,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "inspector": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js"
+    "inspector": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js",
+    "check:versions": "node scripts/check-versions.mjs"
   },
   "keywords": [
     "mcp",
@@ -36,7 +45,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "cheerio": "^1.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",

@@ -1,6 +1,6 @@
 # RaivatEdu Education MCP Server
 
-An unofficial, read-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that lets Claude Desktop (or any MCP client) explore the **public** RaivatEdu website — [raivatedu.com](https://www.raivatedu.com) — using natural language.
+The official, read-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server for RaivatEdu. It lets Claude Desktop (or any MCP client) explore the **public** RaivatEdu website — [raivatedu.com](https://www.raivatedu.com) — using natural language.
 
 RaivatEdu is **admissions & student-relationship software** (a SaaS marketing site), **not** a course catalog. This server reflects what the site actually publishes: product/feature information, pricing by market, solutions by audience, resource articles, and contact details. It fetches only public marketing pages, honours `robots.txt`, and never touches private/authenticated areas.
 
@@ -13,6 +13,7 @@ RaivatEdu is **admissions & student-relationship software** (a SaaS marketing si
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Installation, build & run](#installation-build--run)
+- [Run over HTTP / Docker](#run-over-http--docker)
 - [Claude Desktop integration](#claude-desktop-integration)
 - [MCP tool reference](#mcp-tool-reference)
 - [Resources & prompts](#resources--prompts)
@@ -153,6 +154,42 @@ npm run dev
 
 ---
 
+## Run over HTTP / Docker
+
+The same server also speaks Streamable HTTP (stateless, JSON responses):
+
+```bash
+npm run build
+npm run start:http                 # or: TRANSPORT=http node dist/index.js
+PORT=3100 npm run start:http       # PORT defaults to 3000
+```
+
+| Path | What it is |
+| --- | --- |
+| `POST /mcp` | The MCP endpoint (Streamable HTTP, stateless). No API key. |
+| `GET /mcp` | `405` by design (no server-sent event stream in stateless mode). |
+| `GET /health` | Liveness: `{"status":"ok"}`. |
+| `GET /version` | Name, version, live tool/resource/prompt counts and `mcp_endpoint`. |
+| `GET /.well-known/mcp.json` | Discovery document. Its endpoint comes from `PUBLIC_BASE_URL` (default `https://mcp.raivatedu.com`). |
+| `GET /` | Status page. |
+
+Try it with the MCP Inspector CLI:
+
+```bash
+npx @modelcontextprotocol/inspector --cli http://localhost:3000/mcp --transport http --method tools/list
+```
+
+Docker (multi-stage image, runs as a non-root user, HTTP on port 3000):
+
+```bash
+docker build -t raivatedu-mcp .
+docker run -p 3000:3000 raivatedu-mcp
+```
+
+For local use set `PUBLIC_BASE_URL=http://localhost:3000` so discovery points at your machine. The hosted endpoint is `https://mcp.raivatedu.com/mcp` (pending confirmation). See [Environment variables](#environment-variables) for the HTTP guards (`MCP_ALLOWED_HOSTS`, `MCP_ALLOWED_ORIGINS`, `MCP_RATE_LIMIT_PER_MIN`, `TRUST_PROXY`).
+
+---
+
 ## Claude Desktop integration
 
 1. **Install Node.js** (see prerequisites) and note the absolute path to `node`:
@@ -288,6 +325,7 @@ All optional; the server runs with zero config. See `.env.example`.
 | `MCP_ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1],mcp.raivatedu.com` | HTTP only: Host allowlist for `/mcp`. |
 | `MCP_ALLOWED_ORIGINS` | `https://mcp.raivatedu.com,https://raivatedu.com,https://www.raivatedu.com` | HTTP only: browser origins allowed on `/mcp`. |
 | `MCP_RATE_LIMIT_PER_MIN` | `60` | HTTP only: requests per minute per IP (0 = off). |
+| `PUBLIC_BASE_URL` | `https://mcp.raivatedu.com` | HTTP only: public base URL advertised in discovery, `/` and `/version`. |
 | `TRUST_PROXY` | unset | HTTP only: `1` behind Cloudflare/Apache (rate limit keys on the right-most `X-Forwarded-For` hop). |
 
 ---
@@ -295,7 +333,7 @@ All optional; the server runs with zero config. See `.env.example`.
 ## Testing
 
 ```bash
-npm test          # offline unit + integration tests (mocked HTTP) — 51 tests
+npm test          # offline unit + integration tests (mocked HTTP)
 npm run typecheck # tsc --noEmit
 RUN_SMOKE=1 npm test   # also runs optional live tests against raivatedu.com
 ```
@@ -387,4 +425,4 @@ Once connected in Claude Desktop you can ask:
 
 ## License
 
-MIT — see [LICENSE](./LICENSE). Independent/unofficial; "RaivatEdu" marks belong to RaivatEdu Technologies Pvt. Ltd. Not affiliated or endorsed.
+MIT — see [LICENSE](./LICENSE). "RaivatEdu" marks belong to RaivatEdu Technologies Pvt. Ltd.

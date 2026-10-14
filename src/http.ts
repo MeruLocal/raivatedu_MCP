@@ -7,9 +7,11 @@
  * request) which is simple to scale and avoids request-id collisions.
  *
  * Endpoints:
- *   POST /mcp     – MCP JSON-RPC (the endpoint clients connect to)
- *   GET  /health  – liveness probe (JSON)
- *   GET  /        – human-friendly status page
+ *   POST /mcp                  – MCP JSON-RPC (the endpoint clients connect to)
+ *   GET  /health               – liveness probe: {"status":"ok"}
+ *   GET  /version              – name, version, live tool/resource/prompt counts, mcp_endpoint
+ *   GET  /.well-known/mcp.json – discovery document (public base URL from PUBLIC_BASE_URL)
+ *   GET  /                     – human-friendly status page
  */
 
 import express, { type Express, type Request, type Response } from "express";
@@ -22,7 +24,12 @@ import {
 } from "./config.js";
 import { createServer } from "./server.js";
 import { createLogger } from "./utils/logger.js";
-import { getSharedWebsiteClient } from "./services/website-client.js";
+import {
+  getSharedWebsiteClient,
+  type WebsiteClient,
+} from "./services/website-client.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import {
   jsonErrorHandler,
   loadHttpSecurityConfig,
@@ -40,11 +47,50 @@ const JSON_RPC_METHOD_NOT_ALLOWED = {
   id: null,
 };
 
-function statusPage(): string {
+/** Public host the server is reached at when PUBLIC_BASE_URL is unset. */
+export const DEFAULT_PUBLIC_BASE_URL = "https://mcp.raivatedu.com";
+
+/**
+ * The public base URL advertised in discovery, the status page and /version.
+ * Reads PUBLIC_BASE_URL (http/https only, trailing slash stripped); never
+ * derived from the request's Host or X-Forwarded-Host.
+ */
+export function publicBaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+  const raw = env.PUBLIC_BASE_URL?.trim();
+  if (!raw) return DEFAULT_PUBLIC_BASE_URL;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") {
+      return DEFAULT_PUBLIC_BASE_URL;
+    }
+    if (u.username || u.password || u.search || u.hash) {
+      return DEFAULT_PUBLIC_BASE_URL;
+    }
+    return `${u.origin}${u.pathname}`.replace(/\/+$/, "");
+  } catch {
+    return DEFAULT_PUBLIC_BASE_URL;
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+const SERVER_SUMMARY =
+  "Read-only access to the public RaivatEdu website (admissions and education CRM software).";
+
+/** Human-friendly status page served at GET /. */
+export function statusPage(baseUrl: string): string {
+  const endpoint = escapeHtml(`${baseUrl}/mcp`);
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>RaivatEdu Education MCP Server</title>
+<title>RaivatEdu MCP Server</title>
 <style>
   :root{color-scheme:light dark}
   *{box-sizing:border-box}
@@ -54,7 +100,7 @@ function statusPage(): string {
     color:#1a1a1a;background:#fff;font-size:17px;
   }
   h1{font-size:2.3rem;line-height:1.25;font-weight:700;margin:0 0 1.6rem;letter-spacing:-.01em}
-  p{margin:1.1rem 0}
+  p,ul{margin:1.1rem 0}
   a{color:#1a56db;text-decoration:underline}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.92em}
   .fine{font-size:.82rem;color:#6b7280;margin:.4rem 0 1.4rem}
@@ -65,49 +111,82 @@ function statusPage(): string {
   }
 </style></head>
 <body>
-  <h1>RaivatEdu Website &amp; Product Knowledge MCP Server</h1>
+  <h1>RaivatEdu MCP Server</h1>
 
-  <p>Read-only RaivatEdu website mirror (product knowledge: pricing, features,
-  solutions, resources, comparisons) plus site navigation and reachability tools.
-  Connect via the Streamable HTTP endpoint at <code>/mcp</code>. No API key is
-  required &mdash; this server holds no customer data and performs no account actions.</p>
+  <p>${SERVER_SUMMARY} Connect any MCP client to the Streamable HTTP endpoint
+  <code>${endpoint}</code> (HTTP <code>POST</code>, no API key).</p>
 
-  <p>Status: <a href="/version">/version</a> &middot; Discovery:
-  <a href="/.well-known/mcp.json">/.well-known/mcp.json</a> &middot; Tools:
-  <code>POST /mcp</code> &rarr; <code>tools/list</code></p>
+  <p>What it can do:</p>
+  <ul>
+    <li>Plans and prices per market, exactly as the site publishes them</li>
+    <li>Product features and solutions for schools, colleges, coaching institutes and training teams</li>
+    <li>Resource articles</li>
+    <li>Contact and demo links</li>
+    <li>Page text, site search and a reachability check</li>
+  </ul>
 
-  <p class="fine">This is not a student or admissions API. It holds no customer
-  data, performs no account actions, and needs no API key &mdash; never send one here.</p>
+  <p class="fine">It holds no student, enquiry or customer data and performs no
+  account actions. Never send credentials here.</p>
 
-  <p>Read-only RaivatEdu website mirror (product knowledge: pricing, features,
-  solutions, resources, comparisons) plus site navigation and reachability tools.
-  Connect via the Streamable HTTP endpoint at <code>/mcp</code>. No API key is
-  required, and the public endpoint returns no personal data. This is not an
-  admissions API and it performs no account actions &mdash; never send credentials here.</p>
-
-  <p>Content-management tools and the tools that read newsletter subscribers or
-  contact-form submissions are not served on this endpoint; they require an
-  authenticated session.</p>
-
-  <p>Status: <a href="/version">/version</a> &middot; Health: <a href="/health">/health</a></p>
+  <p>Health: <a href="/health">/health</a> &middot; Version: <a href="/version">/version</a>
+  &middot; Discovery: <a href="/.well-known/mcp.json">/.well-known/mcp.json</a></p>
 </body></html>`;
 }
 
-/** Minimal discovery document advertised at /.well-known/mcp.json. */
-function discoveryDoc(port: number) {
+/**
+ * Discovery document advertised at /.well-known/mcp.json. Tool names are
+ * deliberately not listed: tools/list is the single source for those.
+ */
+export function discoveryDoc(baseUrl: string) {
   return {
     name: SERVER_NAME,
     version: SERVER_VERSION,
     description:
-      "Read-only MCP server for the public RaivatEdu education-software website (raivatedu.com).",
+      "Read-only MCP server for the public RaivatEdu website (raivatedu.com): pricing per market, features, solutions, resource articles, contact details, page content and search.",
     transport: {
       type: "streamable-http",
-      endpoint: `http://localhost:${port}/mcp`,
+      endpoint: `${baseUrl}/mcp`,
     },
     authentication: "none",
     readOnly: true,
     documentation: "https://www.raivatedu.com",
   };
+}
+
+export interface ServerCounts {
+  tools: number;
+  resources: number;
+  resource_templates: number;
+  prompts: number;
+}
+
+/** Count what a freshly built server registers, over the public protocol. */
+export async function countRegistrations(
+  config: RuntimeConfig,
+  websiteClient?: WebsiteClient,
+): Promise<ServerCounts> {
+  const { server } = createServer(config, websiteClient);
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverSide);
+  const client = new Client({ name: `${SERVER_NAME}-self-count`, version: SERVER_VERSION });
+  await client.connect(clientSide);
+  try {
+    const [tools, resources, templates, prompts] = await Promise.all([
+      client.listTools(),
+      client.listResources(),
+      client.listResourceTemplates(),
+      client.listPrompts(),
+    ]);
+    return {
+      tools: tools.tools.length,
+      resources: resources.resources.length,
+      resource_templates: templates.resourceTemplates.length,
+      prompts: prompts.prompts.length,
+    };
+  } finally {
+    await client.close();
+    await server.close();
+  }
 }
 
 /**
@@ -116,8 +195,8 @@ function discoveryDoc(port: number) {
  */
 export function createHttpApp(
   baseConfig: RuntimeConfig,
-  port: number,
   security: HttpSecurityConfig = loadHttpSecurityConfig(),
+  baseUrl: string = publicBaseUrl(),
 ): Express {
   const config = httpConfig(baseConfig);
   const logger = createLogger(config);
@@ -129,20 +208,36 @@ export function createHttpApp(
   app.use("/mcp", ...mcpGuards(security));
   app.use(express.json({ limit: "1mb" }));
 
+  // Liveness only.
   app.get("/health", (_req: Request, res: Response) => {
-    res.json({ status: "ok", server: SERVER_NAME, version: SERVER_VERSION });
+    res.json({ status: "ok" });
   });
 
-  app.get("/version", (_req: Request, res: Response) => {
-    res.json({ name: SERVER_NAME, version: SERVER_VERSION });
+  // Metadata: counts come live from a registered server, not hard-coded.
+  let counts: Promise<ServerCounts> | undefined;
+  app.get("/version", async (_req: Request, res: Response) => {
+    counts ??= countRegistrations(config, client);
+    try {
+      res.json({
+        name: SERVER_NAME,
+        version: SERVER_VERSION,
+        ...(await counts),
+        mcp_endpoint: `${baseUrl}/mcp`,
+      });
+    } catch {
+      counts = undefined;
+      res.json({ name: SERVER_NAME, version: SERVER_VERSION, mcp_endpoint: `${baseUrl}/mcp` });
+    }
   });
 
   app.get("/.well-known/mcp.json", (_req: Request, res: Response) => {
-    res.json(discoveryDoc(port));
+    // Public metadata with no credentials: readable by browser inspectors.
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.json(discoveryDoc(baseUrl));
   });
 
   app.get("/", (_req: Request, res: Response) => {
-    res.type("html").send(statusPage());
+    res.type("html").send(statusPage(baseUrl));
   });
 
   // MCP endpoint — stateless: build a fresh server + transport per request.
@@ -190,7 +285,7 @@ export async function runHttp(
   port: number,
 ): Promise<void> {
   const logger = createLogger(config);
-  const app = createHttpApp(config, port);
+  const app = createHttpApp(config);
 
   await new Promise<void>((resolve, reject) => {
     const httpServer = app.listen(port, () => {
