@@ -232,7 +232,7 @@ Args:
           pricing_url: tag("pricing"),
           signup_url: null,
           note: "No self-serve signup page is published in the sitemap; use the demo or contact page.",
-          call_to_action: "Book a demo or contact sales to start a trial.",
+          call_to_action: "Book a demo or contact sales.",
         };
         const lines = [
           `# Get started with RaivatEdu (${m.toUpperCase()})`,

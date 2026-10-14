@@ -98,4 +98,23 @@ describe("WebsiteClient", () => {
     expect(res.ok).toBe(false);
     expect(res.status).toBe(500);
   });
+
+  it("follows a redirect to a catalog page", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 301, headers: { location: "/in/pricing" } }))
+      .mockResolvedValueOnce(htmlResponse("<h1>pricing</h1>"));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await makeClient().get(`${SITE_ORIGIN}/in`);
+    expect(res.body).toContain("pricing");
+  });
+
+  it("refuses a redirect to a path outside the catalog", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 302, headers: { location: "/in/not-a-real-page" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(makeClient({ maxRetries: 0 }).get(`${SITE_ORIGIN}/in`)).rejects.toThrow(/outside the catalog/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
