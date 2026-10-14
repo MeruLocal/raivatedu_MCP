@@ -15,6 +15,7 @@
   - The `/sse` wording was removed in d64497c, so that part of the original finding is already fixed on main.
 - **`discoveryDoc(port)` (`:85-99`)** advertises `endpoint: http://localhost:${port}/mcp`. In production, `/.well-known/mcp.json` therefore tells clients and registries to connect to localhost.
 - **CORS:** the audit script reports `WARN discovery: manifest lacks Access-Control-Allow-Origin: *` (measured on a local build of main).
+- **Re-audit 2026-10-14** (new `audit-live-mcp.mjs`, same build): the localhost endpoint is now a hard **`FAIL X.discovery_url`** ("discovery doc advertises a dev host: http://localhost:3917/mcp"), plus `WARN C16.cors` for the missing `Access-Control-Allow-Origin: *`. This plan clears both. The status page also links `/version` twice and `/health` once; after the rewrite each appears once.
 
 **Not checked:** what `https://mcp.raivatedu.com/.well-known/mcp.json` serves today (unreachable from the sandbox).
 
