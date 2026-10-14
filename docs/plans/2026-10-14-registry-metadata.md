@@ -9,11 +9,10 @@
 - There is no `server.json`, so the server cannot be published to the official MCP registry.
 - The version is hard-coded twice: `src/config.ts:163` (`SERVER_VERSION = "1.0.0"`) and `package.json` (`"version": "1.0.0"`). The User-Agent, `/version`, `/health`, the discovery doc and `--version` all read the constant, so a `package.json` bump silently leaves them stale.
 - `/health` and `/version` (`src/http.ts:109-115`) return almost the same JSON.
-- The audit script against a local build of main @ d64497c gives **2 fail · 5 warn · 13 pass**, including:
-  - `FAIL tools: /version says undefined tools, tools/list returns 10`
-  - `WARN version: /version does not advertise mcp_endpoint`
-  - The other FAIL (`no mcp-session-id header on initialize`) and its matching WARN are specific to HelloGrowthCRM. This server is stateless by design (`sessionIdGenerator: undefined`), so they don't apply here.
-- The npm package `raivat-education-mcp-server` is not published (not checked; no registry access from the sandbox).
+- Audit script, first run (old script, local build of main @ d64497c): **2 fail · 5 warn · 13 pass**, including `FAIL tools: /version says undefined tools, tools/list returns 10` and `WARN version: /version does not advertise mcp_endpoint`. The other FAIL there (`no mcp-session-id header on initialize`) was HelloGrowthCRM-specific; this server is stateless by design.
+- **Re-audit 2026-10-14** with the new `audit-live-mcp.mjs` (same build): the tool-count FAIL is gone, because the new script only compares counts when `/version` publishes one. What remains for this plan is `WARN X.version /version does not advertise the MCP endpoint path`. Publishing live counts (step 3) stays worthwhile, because the new script then cross-checks them (`C15.tool_count`).
+- The npm package `raivat-education-mcp-server` is not published: `https://registry.npmjs.org/raivat-education-mcp-server` returns **404** (measured 2026-10-14).
+- The SDK range in `package.json` is `^1.12.0` while the lockfile resolves `1.32.1`. Anyone installing the package into a tree that already holds an older 1.x (1.12 or later) can satisfy the range with it, and older 1.x releases lack APIs the other plans rely on (the host-validation middleware, `Implementation.websiteUrl`/`icons`). (Added by re-audit 2026-10-14.)
 
 ## Proposed fix
 
@@ -29,8 +28,9 @@
    - The Dockerfile already copies `package.json` into the runtime image (verify while implementing).
 3. **`/version` vs `/health`:** keep both and document them.
    - `/health` is liveness only: `{status:"ok"}`.
-   - `/version` is metadata: `{name, version, tools, resources, prompts, mcp_endpoint}`. The counts come live from the registered server (build one server at startup and count its registrations), not hard-coded, which clears the audit FAIL and WARN above.
-4. **`scripts/check-versions.mjs`**: package.json and server.json versions must match. Wire it into the CI plan as `npm run check:versions`.
+   - `/version` is metadata: `{name, version, tools, resources, prompts, mcp_endpoint}`. The counts come live from the registered server (build one server at startup and count its registrations), not hard-coded, which clears the `X.version` WARN above.
+4. **SDK range:** raise `@modelcontextprotocol/sdk` to `^1.32.1` (matching the lockfile; no runtime change).
+5. **`scripts/check-versions.mjs`**: package.json and server.json versions must match. Wire it into the CI plan as `npm run check:versions`.
 
 ## Tests to add
 
