@@ -9,7 +9,12 @@ import {
   ValidationError,
   WebsiteClientError,
 } from "../utils/errors.js";
-import { CATALOG, resolveToSafeUrl, type CatalogPage } from "../utils/url.js";
+import {
+  getCatalogState,
+  pagesForMarket,
+  resolveToSafeUrl,
+  type CatalogPage,
+} from "../utils/url.js";
 import { parsePage, type ParsedPage } from "../services/content-parser.js";
 import { buildResult, marketField, responseFormatField } from "./shared.js";
 import { withUtm } from "../utils/utm.js";
@@ -37,10 +42,6 @@ const SEARCHABLE_TYPES: ReadonlySet<CatalogPage["type"]> = new Set([
   "about",
   "resource-article",
 ]);
-
-function pagesForMarket(market: Market): CatalogPage[] {
-  return CATALOG.filter((p) => p.market === market || p.market === null);
-}
 
 /** Fixed search priority for pages whose path does not match the query. */
 const SEARCH_PRIORITY: readonly CatalogPage["type"][] = [
@@ -95,7 +96,7 @@ export function registerPageTools(server: McpServer, ctx: ServerContext): void {
       title: "List RaivatEdu Pages",
       description: `List the public pages available on RaivatEdu for a market — a navigation map of the site.
 
-Returns the verified set of pages (derived from the site's sitemap): home, pricing, enterprise, features (+ detail pages), solutions (+ detail pages), product, integrations, security, about, contact, demo, privacy, terms, resources, blog, guides, help, plus the global careers page. Feed any returned path to raivatedu_get_page_content.
+Returns the known public pages (from the site's live sitemap, refreshed daily, or the verified snapshot when the sitemap cannot be read; catalog_source says which): home, pricing, enterprise, features (+ detail pages), solutions (+ detail pages), product, integrations, security, about, contact, demo, privacy, terms, resources, blog, guides, help, plus the global careers page. Feed any returned path to raivatedu_get_page_content.
 
 Args:
   - market (optional): locale to list (${MARKETS.join(", ")}); defaults to the configured market.
@@ -121,9 +122,12 @@ Args:
           const t = type.trim().toLowerCase();
           pages = pages.filter((p) => p.type === t);
         }
+        const state = getCatalogState();
         const structured = {
           market: m,
           count: pages.length,
+          catalog_source: state.source,
+          catalog_fetched_at: state.fetchedAt,
           pages: pages.map((p) => ({
             path: p.path,
             url: withUtm(p.url, "raivatedu_list_pages"),
@@ -133,7 +137,7 @@ Args:
         };
         const lines = [
           `# RaivatEdu pages — ${m.toUpperCase()}${type ? ` (type: ${type})` : ""}`,
-          `Found ${pages.length} pages.`,
+          `Found ${pages.length} pages (catalog: ${state.source}${state.fetchedAt ? `, fetched ${state.fetchedAt}` : ""}).`,
           "",
           ...pages.map((p) => `- [${p.type}] ${p.path}`),
         ];

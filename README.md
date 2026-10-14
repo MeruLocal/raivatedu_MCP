@@ -331,6 +331,7 @@ All optional; the server runs with zero config. See `.env.example`.
 | `MCP_ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1],mcp.raivatedu.com` | HTTP only: Host allowlist for `/mcp`. |
 | `MCP_ALLOWED_ORIGINS` | `https://mcp.raivatedu.com,https://raivatedu.com,https://www.raivatedu.com` | HTTP only: browser origins allowed on `/mcp`. |
 | `MCP_RATE_LIMIT_PER_MIN` | `60` | HTTP only: requests per minute per IP (0 = off). |
+| `RAIVATEDU_SITEMAP_REFRESH_MS` | `86400000` | Rebuild the page catalog from the sitemap this often (0 = snapshot only). |
 | `PUBLIC_BASE_URL` | `https://mcp.raivatedu.com` | HTTP only: public base URL advertised in discovery, `/` and `/version`. |
 | `TRUST_PROXY` | unset | HTTP only: `1` behind Cloudflare/Apache (rate limit keys on the right-most `X-Forwarded-For` hop). |
 
@@ -393,7 +394,7 @@ Once connected in Claude Desktop you can ask:
 ## Security considerations
 
 - **Read-only.** No tool writes, submits forms, sends messages, or authenticates. Contact tools only surface already-public email addresses.
-- **SSRF prevention.** Outbound fetches are restricted to `raivatedu.com`/`www.raivatedu.com` over HTTP(S), and only to paths in the verified sitemap-derived allowlist. Full URLs are parsed and host-checked. Redirects are followed manually (at most 5 hops) and each `Location` is checked **before** it is fetched: HTTPS only, an allowed host, never `/api/`. Responses are capped at 2 MB (declared or streamed) and must be HTML or XML. Arbitrary/internal/external URLs are refused.
+- **SSRF prevention.** Outbound fetches are restricted to `raivatedu.com`/`www.raivatedu.com` over HTTP(S), and only to paths in the page allowlist (built from the live sitemap, shape-checked, with the verified snapshot as fallback). Full URLs are parsed and host-checked. Redirects are followed manually (at most 5 hops) and each `Location` is checked **before** it is fetched: HTTPS only, an allowed host, never `/api/`. Responses are capped at 2 MB (declared or streamed) and must be HTML or XML. Arbitrary/internal/external URLs are refused.
 - **HTTP endpoint guards.** `POST /mcp` checks the `Host` header (`MCP_ALLOWED_HOSTS`) and the browser `Origin` (`MCP_ALLOWED_ORIGINS`; no Origin and localhost pass), rate-limits each client IP (`MCP_RATE_LIMIT_PER_MIN`, default 60; set `TRUST_PROXY=1` behind a proxy), and answers oversized or malformed bodies with JSON errors that carry no stack trace.
 - **Load on the website.** One shared client per process caps simultaneous outbound requests (`RAIVATEDU_MAX_CONCURRENT_REQUESTS`) and caches successful pages for 10 minutes (`RAIVATEDU_CACHE_TTL_MS`).
 - **robots.txt respected.** `/api/` is always blocked, matching the site's `Disallow: /api/`.
@@ -410,7 +411,7 @@ Once connected in Claude Desktop you can ask:
 - **Not a course catalog.** RaivatEdu publishes no public courses, categories, user accounts, or search API, so there are intentionally **no** `list_courses`/`get_course_details`/`list_categories` tools. Course-like names on the site are sample data only.
 - **`search_content` is client-side** over the curated content pages of a market (capped per call on HTTP, see `RAIVATEDU_SEARCH_MAX_PAGES`) — it is not a full-site crawl or a live search index.
 - **Scope = public marketing pages.** The authenticated product (`app.raivatedu.com`) and `/api/` are out of scope by design.
-- **Catalog is a snapshot.** Page/feature/market lists were captured on 2026-10-13. If the site adds pages, update `src/config.ts` (and the catalog count test). Tools degrade gracefully (404 → clear error) if a page is removed.
+- **Catalog follows the sitemap.** At startup (and every 24 h, `RAIVATEDU_SITEMAP_REFRESH_MS`) the server rebuilds the page list from `https://www.raivatedu.com/sitemap.xml` in the background; until that succeeds, or if it fails, it serves the verified 2026-10-13 snapshot. `raivatedu_list_pages` reports `catalog_source` (`sitemap` or `snapshot`) and `catalog_fetched_at`. Only URLs that match known shapes are accepted (a known market, a known top-level page, or a lowercase slug under `features/`, `solutions/` or `resources/`, plus `/careers`), so the sitemap can add same-site public pages but nothing else. A new **market** still needs a code change.
 - **`include_descriptions: true`** issues one request per item (slower); off by default.
 
 ---

@@ -12,7 +12,7 @@ import {
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ServerContext } from "../context.js";
 import { SITE_ORIGIN, MARKETS, MARKET_INFO, type Market } from "../config.js";
-import { CATALOG } from "../utils/url.js";
+import { pagesForMarket } from "../utils/url.js";
 import { isValidMarket } from "../utils/url.js";
 import {
   extractOrganization,
@@ -111,7 +111,7 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
     },
     async (uri, variables) => {
       const m = marketParam(variables.market);
-      const pages = CATALOG.filter((p) => p.market === m || p.market === null);
+      const pages = pagesForMarket(m);
       return jsonContents(uri, {
         market: m,
         count: pages.length,

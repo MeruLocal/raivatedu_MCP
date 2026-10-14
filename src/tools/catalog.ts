@@ -6,18 +6,32 @@ import type { ServerContext } from "../context.js";
 import {
   SITE_ORIGIN,
   MARKETS,
-  FEATURE_SLUGS,
   FEATURE_LABELS,
-  SOLUTION_SLUGS,
   SOLUTION_LABELS,
-  RESOURCE_SLUGS,
   type Market,
 } from "../config.js";
 import { toToolError, WebsiteClientError } from "../utils/errors.js";
 import { parsePage } from "../services/content-parser.js";
 import { buildResult, marketField, responseFormatField } from "./shared.js";
 import { withUtm } from "../utils/utm.js";
+import { pagesForMarket, type CatalogPage } from "../utils/url.js";
 import { featuresOutput, resourcesOutput, solutionsOutput } from "./schemas.js";
+
+/** Title-case a slug, e.g. "fee-management" -> "Fee Management". */
+function titleCase(slug: string): string {
+  return slug
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** Detail-page slugs of one type for a market, from the current catalog. */
+function slugsFor(market: Market, type: CatalogPage["type"]): string[] {
+  return pagesForMarket(market)
+    .filter((p) => p.type === type)
+    .map((p) => p.path.split("/").pop() ?? "")
+    .filter(Boolean);
+}
 
 /** UTM-tag entry URLs for output (after any fetch, which uses the bare URL). */
 function tagged(entries: CatalogEntry[], tool: string): CatalogEntry[] {
@@ -140,9 +154,9 @@ Args:
     async ({ market, include_descriptions }) => {
       try {
         const m: Market = market ?? ctx.config.defaultMarket;
-        const base: CatalogEntry[] = FEATURE_SLUGS.map((slug) => ({
+        const base: CatalogEntry[] = slugsFor(m, "feature").map((slug) => ({
           slug,
-          label: FEATURE_LABELS[slug],
+          label: (FEATURE_LABELS as Record<string, string>)[slug] ?? titleCase(slug),
           url: `${SITE_ORIGIN}/${m}/features/${slug}`,
         }));
         const enriched = await enrich(ctx, base, include_descriptions);
@@ -187,9 +201,9 @@ Args:
     async ({ market, include_descriptions }) => {
       try {
         const m: Market = market ?? ctx.config.defaultMarket;
-        const base: CatalogEntry[] = SOLUTION_SLUGS.map((slug) => ({
+        const base: CatalogEntry[] = slugsFor(m, "solution").map((slug) => ({
           slug,
-          label: SOLUTION_LABELS[slug],
+          label: (SOLUTION_LABELS as Record<string, string>)[slug] ?? titleCase(slug),
           url: `${SITE_ORIGIN}/${m}/solutions/${slug}`,
         }));
         const enriched = await enrich(ctx, base, include_descriptions);
@@ -234,12 +248,9 @@ Args:
     async ({ market, include_descriptions }) => {
       try {
         const m: Market = market ?? ctx.config.defaultMarket;
-        const base: CatalogEntry[] = RESOURCE_SLUGS.map((slug) => ({
+        const base: CatalogEntry[] = slugsFor(m, "resource-article").map((slug) => ({
           slug,
-          label: slug
-            .split("-")
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-            .join(" "),
+          label: titleCase(slug),
           url: `${SITE_ORIGIN}/${m}/resources/${slug}`,
         }));
         const enriched = await enrich(ctx, base, include_descriptions);

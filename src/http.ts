@@ -29,6 +29,7 @@ import {
   type WebsiteClient,
 } from "./services/website-client.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { sitemapRefreshMs, startSitemapRefresh } from "./services/sitemap.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import {
   jsonErrorHandler,
@@ -286,6 +287,13 @@ export async function runHttp(
 ): Promise<void> {
   const logger = createLogger(config);
   const app = createHttpApp(config);
+  // Background: replace the snapshot catalog with the live sitemap's, using
+  // the same shared client (cache, concurrency cap) the requests use.
+  startSitemapRefresh(
+    getSharedWebsiteClient(config, logger),
+    logger,
+    sitemapRefreshMs(),
+  );
 
   await new Promise<void>((resolve, reject) => {
     const httpServer = app.listen(port, () => {

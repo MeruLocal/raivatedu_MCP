@@ -106,6 +106,10 @@ export const pricingOutput = {
 export const listPagesOutput = {
   market: z.string(),
   count: z.number().int(),
+  catalog_source: z
+    .enum(["sitemap", "snapshot"])
+    .describe("Whether the page list comes from the live sitemap or the verified snapshot."),
+  catalog_fetched_at: z.string().nullable(),
   pages: z.array(
     z.object({
       path: z.string(),
