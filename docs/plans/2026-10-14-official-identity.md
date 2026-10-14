@@ -14,6 +14,7 @@
 - `.env.example:21` contains the placeholder `https://github.com/your-org/raivat-education-mcp`. The real repo is `MeruLocal/raivatedu_MCP`.
 - The README documents only stdio. It has no section on the HTTP transport (`--http` / `TRANSPORT=http`, `PORT` default 3000, `POST /mcp`, `/health`, `/version`, `/.well-known/mcp.json`) or on the existing multi-stage `Dockerfile` (HTTP on port 3000, non-root).
 - The README test count is hard-coded ("51 tests", `README.md:289`) and will drift.
+- `package.json` has no `repository`, `homepage` or `bugs` fields, and no `author` (re-audit 2026-10-14, skill §4 B4). npm, Smithery and Glama read these to show who publishes the server; today nothing ties the package to `MeruLocal/raivatedu_MCP`.
 
 **Not checked:** the legal entity name (see founder decision below).
 
@@ -34,14 +35,16 @@
    - an Inspector example: `npx @modelcontextprotocol/inspector --cli http://localhost:3000/mcp --transport http --method tools/list`
    - the hosted URL `https://mcp.raivatedu.com/mcp`, once confirmed
 5. Replace "51 tests" with wording that has no count (repo rule: counts drift).
+6. **`package.json`:** add `repository` (`git+https://github.com/MeruLocal/raivatedu_MCP.git`), `homepage` (the repo README, or `https://www.raivatedu.com` if the founder prefers) and `bugs` (the repo issues URL). Leave `author` unset unless the founder supplies it: it names a legal owner, which is out of scope here.
 
 ## Tests to add
 
-- `tests/identity.test.ts` reads README, LICENSE and `.env.example` and asserts that none of them match `/unofficial|not affiliated|your-org/i`, and that the README contains `/mcp` and `PORT`.
+- `tests/identity.test.ts` asserts `package.json` has `repository.url` containing `MeruLocal/raivatedu_MCP`. It also reads README, LICENSE and `.env.example` and asserts that none of them match `/unofficial|not affiliated|your-org/i`, and that the README contains `/mcp` and `PORT`.
 - The existing User-Agent test (`tests/website-client.test.ts`) stays.
 
 ## Risks / founder decisions
 
 - **Founder decision (required):** confirm that "RaivatEdu Technologies Pvt. Ltd." is the right owner of the marks. If it is wrong, the founder supplies the change; this plan will not edit it.
 - **Founder decision:** whether the LICENSE notice should be dropped entirely rather than reworded.
+- **Founder decision:** the `author` value for `package.json`, if any.
 - The hosted URL in the README depends on the status-page plan's `PUBLIC_BASE_URL` decision.
