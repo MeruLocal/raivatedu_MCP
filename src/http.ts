@@ -12,11 +12,23 @@
  *   GET  /        – human-friendly status page
  */
 
-import express, { type Request, type Response } from "express";
+import express, { type Express, type Request, type Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { SERVER_NAME, SERVER_VERSION, type RuntimeConfig } from "./config.js";
+import {
+  SERVER_NAME,
+  SERVER_VERSION,
+  httpConfig,
+  type RuntimeConfig,
+} from "./config.js";
 import { createServer } from "./server.js";
 import { createLogger } from "./utils/logger.js";
+import { getSharedWebsiteClient } from "./services/website-client.js";
+import {
+  jsonErrorHandler,
+  loadHttpSecurityConfig,
+  mcpGuards,
+  type HttpSecurityConfig,
+} from "./http-security.js";
 
 const JSON_RPC_METHOD_NOT_ALLOWED = {
   jsonrpc: "2.0" as const,
@@ -98,12 +110,23 @@ function discoveryDoc(port: number) {
   };
 }
 
-export async function runHttp(
-  config: RuntimeConfig,
+/**
+ * Build the Express app (no listening). `config` is the base runtime config;
+ * the HTTP search cap is applied here.
+ */
+export function createHttpApp(
+  baseConfig: RuntimeConfig,
   port: number,
-): Promise<void> {
+  security: HttpSecurityConfig = loadHttpSecurityConfig(),
+): Express {
+  const config = httpConfig(baseConfig);
   const logger = createLogger(config);
+  // One website client for the whole process: shared throttle, concurrency
+  // cap and page cache across every stateless MCP request.
+  const client = getSharedWebsiteClient(config, logger);
   const app = express();
+  app.disable("x-powered-by");
+  app.use("/mcp", ...mcpGuards(security));
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req: Request, res: Response) => {
@@ -125,7 +148,7 @@ export async function runHttp(
   // MCP endpoint — stateless: build a fresh server + transport per request.
   // Served at /mcp (the advertised MCP endpoint).
   const handleMcp = async (req: Request, res: Response): Promise<void> => {
-    const { server } = createServer(config);
+    const { server } = createServer(config, client);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -156,6 +179,18 @@ export async function runHttp(
   // Session-based GET/DELETE are not supported in stateless mode.
   app.get("/mcp", methodNotAllowed);
   app.delete("/mcp", methodNotAllowed);
+
+  // Registered last: JSON errors only, never Express's HTML stack-trace page.
+  app.use(jsonErrorHandler(logger));
+  return app;
+}
+
+export async function runHttp(
+  config: RuntimeConfig,
+  port: number,
+): Promise<void> {
+  const logger = createLogger(config);
+  const app = createHttpApp(config, port);
 
   await new Promise<void>((resolve, reject) => {
     const httpServer = app.listen(port, () => {

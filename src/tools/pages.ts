@@ -4,7 +4,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ServerContext } from "../context.js";
 import { MARKETS, type Market } from "../config.js";
-import { toToolError, ValidationError } from "../utils/errors.js";
+import {
+  toToolError,
+  ValidationError,
+  WebsiteClientError,
+} from "../utils/errors.js";
 import { CATALOG, resolveToSafeUrl, type CatalogPage } from "../utils/url.js";
 import { parsePage, type ParsedPage } from "../services/content-parser.js";
 import { buildResult, marketField, responseFormatField } from "./shared.js";
@@ -34,6 +38,51 @@ const SEARCHABLE_TYPES: ReadonlySet<CatalogPage["type"]> = new Set([
 
 function pagesForMarket(market: Market): CatalogPage[] {
   return CATALOG.filter((p) => p.market === market || p.market === null);
+}
+
+/** Fixed search priority for pages whose path does not match the query. */
+const SEARCH_PRIORITY: readonly CatalogPage["type"][] = [
+  "home",
+  "pricing",
+  "product",
+  "features-index",
+  "solutions-index",
+  "enterprise",
+  "integrations",
+  "security",
+  "about",
+  "feature",
+  "solution",
+  "resource-article",
+];
+
+/**
+ * Choose which searchable pages to fetch for a query: pages whose path
+ * (without the market prefix) contains a query term first, then the rest in
+ * a fixed priority order, capped at `max` (0 = no cap). Needs no fetch.
+ */
+export function selectSearchCandidates(
+  pages: readonly CatalogPage[],
+  terms: readonly string[],
+  max: number,
+): CatalogPage[] {
+  const searchable = pages.filter((p) => SEARCHABLE_TYPES.has(p.type));
+  const rank = (p: CatalogPage) => {
+    const i = SEARCH_PRIORITY.indexOf(p.type);
+    return i === -1 ? SEARCH_PRIORITY.length : i;
+  };
+  const pathMatches = (p: CatalogPage) => {
+    const local = p.path.toLowerCase().replace(/^\/[a-z]{2}(?=\/|$)/, "");
+    return terms.some((t) => local.includes(t));
+  };
+  const matched = searchable.filter(pathMatches);
+  const rest = searchable
+    .filter((p) => !pathMatches(p))
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i)
+    .map(({ p }) => p);
+  const ordered = [...matched, ...rest];
+  return max > 0 ? ordered.slice(0, max) : ordered;
 }
 
 export function registerPageTools(server: McpServer, ctx: ServerContext): void {
@@ -221,13 +270,15 @@ Args:
 
 Returns JSON shape:
   {
-    "query": string, "market": string, "pages_searched": number, "count": number,
+    "query": string, "market": string, "pages_searched": number, "pages_failed": number,
+    "count": number, "note"?: string,
     "results": [ { "title", "url", "type", "score": number, "snippet": string } ]
   }
 
 Notes:
-  - Searches ~28 marketing/content pages per market; it does not crawl the entire site.
-  - Returns an empty results array (not an error) when nothing matches.`,
+  - Searches the market's content-rich pages (pages whose path matches the query first); the operator may cap how many pages one search fetches. It does not crawl the entire site.
+  - Returns an empty results array (not an error) when nothing matches.
+  - Returns an error if the site cannot be reached, and a note when some pages could not be fetched (results may then be incomplete).`,
       inputSchema: {
         query: z
           .string()
@@ -260,23 +311,47 @@ Notes:
           );
         }
 
-        const candidates = pagesForMarket(m).filter((p) =>
-          SEARCHABLE_TYPES.has(p.type),
+        const candidates = selectSearchCandidates(
+          pagesForMarket(m),
+          terms,
+          ctx.config.searchMaxPages ?? 0,
         );
 
+        const failures: WebsiteClientError[] = [];
         const fetched = await Promise.all(
           candidates.map(async (p) => {
+            let body: string;
             try {
-              const { body } = await ctx.client.get(p.url);
-              return { page: p, parsed: parsePage(body, 4000) };
-            } catch {
-              return null; // skip pages that fail; search is best-effort
+              ({ body } = await ctx.client.get(p.url));
+            } catch (err) {
+              // Only fetch failures are tolerated; anything else is a bug.
+              if (!(err instanceof WebsiteClientError)) throw err;
+              failures.push(err);
+              return null;
             }
+            return { page: p, parsed: parsePage(body, 4000) };
           }),
         );
+        const ok = fetched.filter(
+          (x): x is { page: CatalogPage; parsed: ParsedPage } => x !== null,
+        );
 
-        const results = fetched
-          .filter((x): x is { page: CatalogPage; parsed: ParsedPage } => x !== null)
+        if (ok.length === 0 && candidates.length > 0) {
+          const first = failures[0];
+          return toToolError(
+            new WebsiteClientError(
+              `Could not reach raivatedu.com to search; nothing was searched${first ? ` (${first.message})` : ""}. Retry shortly or call raivatedu_check_website_status.`,
+              { status: first?.status, retryable: first?.retryable ?? true },
+            ),
+          );
+        }
+
+        const note =
+          failures.length > 0
+            ? `Note: ${failures.length} of ${candidates.length} pages could not be fetched; results may be incomplete.`
+            : undefined;
+
+        const results = ok
           .map(({ page, parsed }) => {
             const haystacks = {
               title: parsed.title.toLowerCase(),
@@ -306,14 +381,17 @@ Notes:
         const structured = {
           query,
           market: m,
-          pages_searched: fetched.filter(Boolean).length,
+          pages_searched: ok.length,
+          pages_failed: failures.length,
           count: results.length,
           results,
+          ...(note ? { note } : {}),
         };
 
         const lines = [
           `# Search results for "${query}" (${m.toUpperCase()})`,
           `Searched ${structured.pages_searched} pages; ${results.length} match(es).`,
+          ...(note ? [note] : []),
           "",
         ];
         if (results.length === 0) {

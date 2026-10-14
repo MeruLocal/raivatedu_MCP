@@ -13,7 +13,7 @@ import {
   RESOURCE_SLUGS,
   type Market,
 } from "../config.js";
-import { toToolError } from "../utils/errors.js";
+import { toToolError, WebsiteClientError } from "../utils/errors.js";
 import { parsePage } from "../services/content-parser.js";
 import {
   buildResult,
@@ -43,24 +43,56 @@ interface CatalogEntry {
   description?: string;
 }
 
-/** Optionally enrich entries with live meta descriptions, fetched in parallel. */
+interface Enriched {
+  entries: CatalogEntry[];
+  /** Number of items whose description could not be fetched (only when requested). */
+  unavailable?: number;
+  note?: string;
+}
+
+/**
+ * Optionally enrich entries with live meta descriptions, fetched in parallel.
+ * Fetch failures fall back to label + URL and are counted; any other error
+ * (e.g. a parser bug) propagates.
+ */
 async function enrich(
   ctx: ServerContext,
   entries: CatalogEntry[],
   include: boolean,
-): Promise<CatalogEntry[]> {
-  if (!include) return entries;
-  return Promise.all(
+): Promise<Enriched> {
+  if (!include) return { entries };
+  let unavailable = 0;
+  const out = await Promise.all(
     entries.map(async (e) => {
+      let body: string;
       try {
-        const { body } = await ctx.client.get(e.url);
-        const parsed = parsePage(body);
-        return { ...e, description: parsed.description || parsed.title };
-      } catch {
+        ({ body } = await ctx.client.get(e.url));
+      } catch (err) {
+        if (!(err instanceof WebsiteClientError)) throw err;
+        unavailable++;
         return { ...e, description: undefined };
       }
+      const parsed = parsePage(body);
+      return { ...e, description: parsed.description || parsed.title };
     }),
   );
+  let note: string | undefined;
+  if (unavailable > 0 && unavailable === entries.length) {
+    note =
+      "Note: descriptions could not be fetched (the site could not be reached); labels and URLs are from the verified catalog.";
+  } else if (unavailable > 0) {
+    note = `Note: ${unavailable} of ${entries.length} descriptions could not be fetched.`;
+  }
+  return { entries: out, unavailable, note };
+}
+
+/** Structured fields describing description availability. */
+function enrichFields(e: Enriched): Record<string, unknown> {
+  if (e.unavailable === undefined) return {};
+  return {
+    descriptions_unavailable: e.unavailable,
+    ...(e.note ? { note: e.note } : {}),
+  };
 }
 
 function render(
@@ -68,8 +100,10 @@ function render(
   entries: CatalogEntry[],
   structured: Record<string, unknown>,
   format: ResponseFormat,
+  note?: string,
 ): ReturnType<typeof buildResult> {
   const lines = [`# ${title}`, ""];
+  if (note) lines.push(note, "");
   for (const e of entries) {
     lines.push(`## ${e.label}`);
     lines.push(`- URL: ${e.url}`);
@@ -113,13 +147,20 @@ Returns JSON shape:
           label: FEATURE_LABELS[slug],
           url: `${SITE_ORIGIN}/${m}/features/${slug}`,
         }));
-        const features = await enrich(ctx, base, include_descriptions);
-        const structured = { market: m, count: features.length, features };
+        const enriched = await enrich(ctx, base, include_descriptions);
+        const features = enriched.entries;
+        const structured = {
+          market: m,
+          count: features.length,
+          features,
+          ...enrichFields(enriched),
+        };
         return render(
           `RaivatEdu features (${m.toUpperCase()})`,
           features,
           structured,
           response_format,
+          enriched.note,
         );
       } catch (err) {
         return toToolError(err);
@@ -157,13 +198,20 @@ Returns JSON shape:
           label: SOLUTION_LABELS[slug],
           url: `${SITE_ORIGIN}/${m}/solutions/${slug}`,
         }));
-        const solutions = await enrich(ctx, base, include_descriptions);
-        const structured = { market: m, count: solutions.length, solutions };
+        const enriched = await enrich(ctx, base, include_descriptions);
+        const solutions = enriched.entries;
+        const structured = {
+          market: m,
+          count: solutions.length,
+          solutions,
+          ...enrichFields(enriched),
+        };
         return render(
           `RaivatEdu solutions (${m.toUpperCase()})`,
           solutions,
           structured,
           response_format,
+          enriched.note,
         );
       } catch (err) {
         return toToolError(err);
@@ -209,7 +257,8 @@ Returns JSON shape:
             .join(" "),
           url: `${SITE_ORIGIN}/${m}/resources/${slug}`,
         }));
-        const articles = await enrich(ctx, base, include_descriptions);
+        const enriched = await enrich(ctx, base, include_descriptions);
+        const articles = enriched.entries;
         const landing_pages = {
           resources: `${SITE_ORIGIN}/${m}/resources`,
           blog: `${SITE_ORIGIN}/${m}/blog`,
@@ -221,11 +270,13 @@ Returns JSON shape:
           landing_pages,
           count: articles.length,
           articles,
+          ...enrichFields(enriched),
         };
 
         const lines = [
           `# RaivatEdu resources (${m.toUpperCase()})`,
           "",
+          ...(enriched.note ? [enriched.note, ""] : []),
           "## Landing pages",
           `- Resources: ${landing_pages.resources}`,
           `- Blog: ${landing_pages.blog}`,

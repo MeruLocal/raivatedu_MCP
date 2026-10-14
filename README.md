@@ -245,7 +245,7 @@ Fetch & summarize a specific public page (title, description, outline, body text
 - **Errors**: unknown path → *"not a known public RaivatEdu page"*; external host → refused (SSRF); `/api/*` → blocked.
 
 ### `raivatedu_search_content`
-Keyword search across ~28 content-rich pages for a market; ranked results with snippets.
+Keyword search across the content-rich pages for a market (pages whose path matches the query first; capped at 12 pages on the public HTTP transport by default); ranked results with snippets. Returns an error, not "no matches", when the site cannot be reached.
 - **Input**: `query` (required, 2–200 chars), `market?`, `limit?` (1–20, default 5), `response_format?`
 - **Output**: `{ query, market, pages_searched, count, results:[{ title, url, type, score, snippet }] }`
 - Empty matches return `count: 0` (not an error).
@@ -280,6 +280,15 @@ All optional; the server runs with zero config. See `.env.example`.
 | `RAIVATEDU_MAX_RETRIES` | `2` | Retries for transient failures (0–5). |
 | `RAIVATEDU_USER_AGENT` | descriptive default | Override the outbound User-Agent. |
 | `RAIVATEDU_LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` \| `silent`. |
+| `RAIVATEDU_CACHE_TTL_MS` | `600000` | Page cache TTL (0 turns caching off, max 3600000). |
+| `RAIVATEDU_CACHE_MAX_ENTRIES` | `500` | Maximum cached pages (LRU). |
+| `RAIVATEDU_MAX_CONCURRENT_REQUESTS` | `4` | Simultaneous outbound requests (1–32). |
+| `RAIVATEDU_SEARCH_MAX_PAGES` | none on stdio, `12` on HTTP | Pages one search may fetch (0 = no cap). |
+| `RAIVATEDU_MAX_RESPONSE_BYTES` | `2097152` | Largest website response read. |
+| `MCP_ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1],mcp.raivatedu.com` | HTTP only: Host allowlist for `/mcp`. |
+| `MCP_ALLOWED_ORIGINS` | `https://mcp.raivatedu.com,https://raivatedu.com,https://www.raivatedu.com` | HTTP only: browser origins allowed on `/mcp`. |
+| `MCP_RATE_LIMIT_PER_MIN` | `60` | HTTP only: requests per minute per IP (0 = off). |
+| `TRUST_PROXY` | unset | HTTP only: `1` behind Cloudflare/Apache (rate limit keys on the right-most `X-Forwarded-For` hop). |
 
 ---
 
@@ -340,7 +349,9 @@ Once connected in Claude Desktop you can ask:
 ## Security considerations
 
 - **Read-only.** No tool writes, submits forms, sends messages, or authenticates. Contact tools only surface already-public email addresses.
-- **SSRF prevention.** Outbound fetches are restricted to `raivatedu.com`/`www.raivatedu.com` over HTTP(S), and only to paths in the verified sitemap-derived allowlist. Full URLs are parsed and host-checked; redirects are re-validated against the allowlist. Arbitrary/internal/external URLs are refused.
+- **SSRF prevention.** Outbound fetches are restricted to `raivatedu.com`/`www.raivatedu.com` over HTTP(S), and only to paths in the verified sitemap-derived allowlist. Full URLs are parsed and host-checked. Redirects are followed manually (at most 5 hops) and each `Location` is checked **before** it is fetched: HTTPS only, an allowed host, never `/api/`. Responses are capped at 2 MB (declared or streamed) and must be HTML or XML. Arbitrary/internal/external URLs are refused.
+- **HTTP endpoint guards.** `POST /mcp` checks the `Host` header (`MCP_ALLOWED_HOSTS`) and the browser `Origin` (`MCP_ALLOWED_ORIGINS`; no Origin and localhost pass), rate-limits each client IP (`MCP_RATE_LIMIT_PER_MIN`, default 60; set `TRUST_PROXY=1` behind a proxy), and answers oversized or malformed bodies with JSON errors that carry no stack trace.
+- **Load on the website.** One shared client per process caps simultaneous outbound requests (`RAIVATEDU_MAX_CONCURRENT_REQUESTS`) and caches successful pages for 10 minutes (`RAIVATEDU_CACHE_TTL_MS`).
 - **robots.txt respected.** `/api/` is always blocked, matching the site's `Disallow: /api/`.
 - **No access-control bypass.** The server never attempts auth, CAPTCHAs, paywalls, or private areas.
 - **Untrusted content.** Page text is treated as **data, not instructions** (stated in the server instructions and the `summarize_page` prompt). Returned text is inert; nothing is executed.
@@ -353,7 +364,7 @@ Once connected in Claude Desktop you can ask:
 ## Known limitations
 
 - **Not a course catalog.** RaivatEdu publishes no public courses, categories, user accounts, or search API, so there are intentionally **no** `list_courses`/`get_course_details`/`list_categories` tools. Course-like names on the site are sample data only.
-- **`search_content` is client-side** over ~28 curated pages per market — it is not a full-site crawl or a live search index.
+- **`search_content` is client-side** over the curated content pages of a market (capped per call on HTTP, see `RAIVATEDU_SEARCH_MAX_PAGES`) — it is not a full-site crawl or a live search index.
 - **Scope = public marketing pages.** The authenticated product (`app.raivatedu.com`) and `/api/` are out of scope by design.
 - **Catalog is a snapshot.** Page/feature/market lists were captured on 2026-10-13. If the site adds pages, update `src/config.ts` (and the catalog count test). Tools degrade gracefully (404 → clear error) if a page is removed.
 - **`include_descriptions: true`** issues one request per item (slower); off by default.
