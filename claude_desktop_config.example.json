@@ -1,0 +1,16 @@
+{
+  "//": "Copy this block into your Claude Desktop claude_desktop_config.json.",
+  "//macos_path": "~/Library/Application Support/Claude/claude_desktop_config.json",
+  "//windows_path": "%APPDATA%\\Claude\\claude_desktop_config.json",
+  "//instructions": "Replace the path in args with the ABSOLUTE path to this project's dist/index.js. On Windows use double backslashes. Then fully quit and reopen Claude Desktop.",
+  "mcpServers": {
+    "raivat-education": {
+      "command": "node",
+      "args": ["/ABSOLUTE/PATH/TO/raivat-education-mcp/dist/index.js"],
+      "env": {
+        "RAIVATEDU_DEFAULT_MARKET": "in",
+        "RAIVATEDU_LOG_LEVEL": "info"
+      }
+    }
+  }
+}

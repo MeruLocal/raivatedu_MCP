@@ -1,0 +1,34 @@
+# Dependencies and build output — reinstalled and rebuilt inside the image.
+node_modules
+dist
+build
+*.tsbuildinfo
+
+# Version control and editor state
+.git
+.gitignore
+.vscode
+.idea
+
+# Secrets — must never enter the build context
+.env
+.env.*
+!.env.example
+*.pem
+
+# Logs and OS cruft
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+
+# Test and tooling output
+coverage
+
+# Repo documentation and working files — not needed at runtime
+README.md
+
+# Container files themselves
+Dockerfile
+.dockerignore

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Evaluation questions for the RaivatEdu Education MCP server.
+  Each question is independent, read-only, verifiable, and stable (answers are
+  grounded in the site's published JSON-LD / sitemap as of 2026-10-13).
+  Answers are exact strings for simple string comparison.
+-->
+<evaluation>
+  <qa_pair>
+    <question>Using the RaivatEdu MCP server, what is the monthly price per user of the Starter plan in the India (in) market? Answer with the integer amount only.</question>
+    <answer>3500</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the maximum number of users eligible for the Professional plan in the India market according to RaivatEdu's pricing?</question>
+    <answer>100</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the minimum number of users required for the Enterprise plan in the India market?</question>
+    <answer>5</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many distinct product feature detail pages does the RaivatEdu site publish (e.g. fee management, admissions, attendance, ...)? Answer with a number.</question>
+    <answer>9</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many audience/solution segments does RaivatEdu market to (such as schools and coaching institutes)? Answer with a number.</question>
+    <answer>4</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many country markets/locales does the RaivatEdu website serve? Answer with a number.</question>
+    <answer>10</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is RaivatEdu's general organization contact email address, as published in the site's structured data?</question>
+    <answer>hello@raivatedu.com</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In which currency is RaivatEdu priced for the United States (us) market? Answer with the three-letter currency code.</question>
+    <answer>USD</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many days is RaivatEdu's free trial, as stated on the pricing page?</question>
+    <answer>14</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>According to the RaivatEdu software application structured data, which operating systems/platforms does the product run on?</question>
+    <answer>Web, iOS, Android</answer>
+  </qa_pair>
+</evaluation>
