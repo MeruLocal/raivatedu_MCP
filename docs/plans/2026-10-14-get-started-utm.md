@@ -12,7 +12,9 @@
   - `src/tools/pricing.ts:93-96`: "All plans include a 14-day free trial (no credit card required)", appended to every pricing answer
   - `src/tools/pricing.ts:25`: the same claim in the tool description
   - `src/prompts/index.ts:58`: "Mention the 14-day free trial"
-- **Currency** in the pricing result (`src/tools/pricing.ts:60`) comes from the static `MARKET_INFO[m].currency` map, not from the offers' `priceCurrency` that the parser already extracts.
+  - `src/prompts/index.ts:79` (`compare_plans` prompt): "… and note the free trial" (added by re-audit 2026-10-14; the first draft of this plan missed it)
+  - `README.md:41`: "14-day trial" in the capability table
+- **Currency** in the pricing result (`src/tools/pricing.ts:60`) comes from the static `MARKET_INFO[m].currency` map, not from the offers' `priceCurrency` that the parser already extracts. The `raivatedu://pricing/{market}` resource does the same (`src/resources/index.ts:143`), so the tool and the resource must change together (re-audit 2026-10-14).
 
 **Not checked:** whether the live pricing JSON-LD carries trial terms (for example an Offer `description`, `eligibleDuration`, or an FAQ "free trial" entry). The site is unreachable from the sandbox. The plan must work either way.
 
@@ -37,8 +39,8 @@
      - a FAQPage answer matching `/free trial/i`
    - Return `{ text, source: "json-ld" | "faq" } | null`.
    - The pricing footer uses that text with its source. If nothing is found, it says "Trial terms: see the pricing page" plus the URL. It no longer asserts 14 days.
-   - Remove the hard-coded claim from the tool description and the prompt. The prompt says "mention any free-trial terms that `get_pricing` reports".
-   - **Currency:** use the single `priceCurrency` shared by all offers. Fall back to `MARKET_INFO` when there are no offers or they disagree. Amounts are untouched.
+   - Remove the hard-coded claim from the tool description and from **both** prompts (`find_relevant_plan` and `compare_plans`). The prompts say "mention any free-trial terms that `get_pricing` reports". Reword `README.md:41` the same way (leave the prices there untouched).
+   - **Currency:** use the single `priceCurrency` shared by all offers. Fall back to `MARKET_INFO` when there are no offers or they disagree. Amounts are untouched. Apply the same rule in `src/resources/index.ts` (pricing resource).
 5. Add the tool to the README tool reference and to the tool-count assertion in `tests/tools.test.ts` (10 → 11).
 
 ## Tests to add
@@ -51,7 +53,8 @@
 - `get_started`: returns demo, contact and pricing URLs for the market, with UTM and `signup_url === null`.
 - `get_page_content` accepts a UTM-tagged URL.
 - The pricing footer with fixture JSON-LD (FAQ "14 days") contains that FAQ text. Without trial data it does not contain "14-day".
-- Currency comes from `priceCurrency`, with the map as fallback.
+- Currency comes from `priceCurrency`, with the map as fallback, in both the tool and the `raivatedu://pricing/in` resource.
+- Neither prompt's text contains "14-day" or "free trial" unconditionally.
 - Prices in the fixture are unchanged (3500 / 4500 / 8000).
 
 ## Risks / founder decisions
