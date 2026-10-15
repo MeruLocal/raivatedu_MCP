@@ -8,4 +8,6 @@ export interface ServerContext {
   config: RuntimeConfig;
   client: WebsiteClient;
   logger: Logger;
+  /** Which transport serves this server (drives the usage-log default). */
+  transport: "stdio" | "http";
 }

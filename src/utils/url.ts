@@ -55,7 +55,7 @@ export interface CatalogPage {
   market: Market | null;
 }
 
-const PAGE_TYPE_BY_SLUG: Record<string, CatalogPage["type"]> = {
+export const PAGE_TYPE_BY_SLUG: Readonly<Record<string, CatalogPage["type"]>> = {
   "": "home",
   pricing: "pricing",
   enterprise: "enterprise",
@@ -115,12 +115,60 @@ function buildCatalog(): CatalogPage[] {
   return pages;
 }
 
-/** Full, immutable catalog of every allowlisted public page. */
-export const CATALOG: readonly CatalogPage[] = Object.freeze(buildCatalog());
+/**
+ * The verified 2026-10-13 snapshot of every allowlisted public page. The
+ * live catalog starts here and may be replaced by one built from the
+ * site's sitemap (see services/sitemap.ts); this snapshot stays the fallback.
+ */
+export const SNAPSHOT_CATALOG: readonly CatalogPage[] = Object.freeze(buildCatalog());
 
-const CATALOG_BY_PATH: ReadonlyMap<string, CatalogPage> = new Map(
-  CATALOG.map((p) => [p.path, p]),
+/** @deprecated Use getCatalog(); kept as an alias of the snapshot. */
+export const CATALOG = SNAPSHOT_CATALOG;
+
+export interface CatalogState {
+  pages: readonly CatalogPage[];
+  source: "sitemap" | "snapshot";
+  fetchedAt: string | null;
+}
+
+let current: CatalogState = {
+  pages: SNAPSHOT_CATALOG,
+  source: "snapshot",
+  fetchedAt: null,
+};
+let currentByPath: ReadonlyMap<string, CatalogPage> = new Map(
+  SNAPSHOT_CATALOG.map((p) => [p.path, p]),
 );
+
+/** The catalog in force: the sitemap-derived one once loaded, else the snapshot. */
+export function getCatalog(): readonly CatalogPage[] {
+  return current.pages;
+}
+
+export function getCatalogState(): CatalogState {
+  return current;
+}
+
+/** Replace the catalog (e.g. after a sitemap load). */
+export function setCatalog(
+  pages: readonly CatalogPage[],
+  source: CatalogState["source"],
+  fetchedAt: string | null,
+): void {
+  const frozen = Object.freeze([...pages]);
+  current = { pages: frozen, source, fetchedAt };
+  currentByPath = new Map(frozen.map((p) => [p.path, p]));
+}
+
+/** Go back to the snapshot (tests, or when the sitemap is turned off). */
+export function resetCatalog(): void {
+  setCatalog(SNAPSHOT_CATALOG, "snapshot", null);
+}
+
+/** Pages of one market plus the global pages, from the current catalog. */
+export function pagesForMarket(market: Market): CatalogPage[] {
+  return getCatalog().filter((p) => p.market === market || p.market === null);
+}
 
 /** Normalize a path: ensure leading slash, strip trailing slash, drop query/hash. */
 export function normalizePath(input: string): string {
@@ -135,7 +183,7 @@ export function normalizePath(input: string): string {
 
 /** Return the catalog entry for a path, or undefined if not allowlisted. */
 export function lookupPath(path: string): CatalogPage | undefined {
-  return CATALOG_BY_PATH.get(normalizePath(path));
+  return currentByPath.get(normalizePath(path));
 }
 
 export function isValidMarket(value: string): value is Market {
@@ -183,7 +231,7 @@ export function resolveToSafeUrl(reference: string): CatalogPage {
     }
   }
 
-  const page = CATALOG_BY_PATH.get(path);
+  const page = currentByPath.get(path);
   if (!page) {
     throw new ValidationError(
       `Path "${path}" is not a known public RaivatEdu page. ` +

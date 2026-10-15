@@ -245,7 +245,6 @@ describe("the real HTTP app", () => {
     resetSharedWebsiteClient();
     const app = createHttpApp(
       loadConfig({ RAIVATEDU_LOG_LEVEL: "silent" }),
-      0,
       { ...loadHttpSecurityConfig({}), rateLimitPerMin: 0 },
     );
     ({ base, server } = await listen(app));

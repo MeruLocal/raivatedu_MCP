@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.merulocal/raivatedu-mcp",
+  "description": "Read-only MCP server for the public RaivatEdu website: pricing per market, features, solutions, resource articles, contact details, page content and search. No API key; returns no personal data.",
+  "status": "active",
+  "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/MeruLocal/raivatedu_MCP",
+    "source": "github"
+  },
+  "websiteUrl": "https://www.raivatedu.com",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.raivatedu.com/mcp"
+    }
+  ]
+}

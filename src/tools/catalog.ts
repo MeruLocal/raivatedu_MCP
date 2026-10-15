@@ -6,21 +6,37 @@ import type { ServerContext } from "../context.js";
 import {
   SITE_ORIGIN,
   MARKETS,
-  FEATURE_SLUGS,
   FEATURE_LABELS,
-  SOLUTION_SLUGS,
   SOLUTION_LABELS,
-  RESOURCE_SLUGS,
   type Market,
 } from "../config.js";
 import { toToolError, WebsiteClientError } from "../utils/errors.js";
 import { parsePage } from "../services/content-parser.js";
-import {
-  buildResult,
-  marketField,
-  responseFormatField,
-  type ResponseFormat,
-} from "./shared.js";
+import { buildResult, marketField, responseFormatField } from "./shared.js";
+import { withUtm } from "../utils/utm.js";
+import { pagesForMarket, type CatalogPage } from "../utils/url.js";
+import { featuresOutput, resourcesOutput, solutionsOutput } from "./schemas.js";
+
+/** Title-case a slug, e.g. "fee-management" -> "Fee Management". */
+function titleCase(slug: string): string {
+  return slug
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** Detail-page slugs of one type for a market, from the current catalog. */
+function slugsFor(market: Market, type: CatalogPage["type"]): string[] {
+  return pagesForMarket(market)
+    .filter((p) => p.type === type)
+    .map((p) => p.path.split("/").pop() ?? "")
+    .filter(Boolean);
+}
+
+/** UTM-tag entry URLs for output (after any fetch, which uses the bare URL). */
+function tagged(entries: CatalogEntry[], tool: string): CatalogEntry[] {
+  return entries.map((e) => ({ ...e, url: withUtm(e.url, tool) }));
+}
 
 const READONLY = {
   readOnlyHint: true,
@@ -99,7 +115,6 @@ function render(
   title: string,
   entries: CatalogEntry[],
   structured: Record<string, unknown>,
-  format: ResponseFormat,
   note?: string,
 ): ReturnType<typeof buildResult> {
   const lines = [`# ${title}`, ""];
@@ -110,7 +125,7 @@ function render(
     if (e.description) lines.push(`- ${e.description}`);
     lines.push("");
   }
-  return buildResult(lines.join("\n"), structured, format);
+  return buildResult(lines.join("\n"), structured);
 }
 
 export function registerCatalogTools(
@@ -123,32 +138,29 @@ export function registerCatalogTools(
       title: "List RaivatEdu Features",
       description: `List the product feature areas RaivatEdu documents, each with its dedicated feature page URL.
 
-The nine feature areas are fixed site sections (Fee management, Students & batches, Admissions, Enrolment & renewals, Attendance, Certificates, Communication, Reports, Platform & security). Use raivatedu_get_page_content on a returned URL for the full write-up of a feature.
+The feature areas are fixed site sections (for example Fee management, Admissions, Attendance, Communication and Reports). Use raivatedu_get_page_content on a returned URL for the full write-up of a feature.
 
 Args:
   - market (optional): locale for the URLs (${MARKETS.join(", ")}); defaults to the configured market.
-  - include_descriptions (boolean): fetch each feature page's summary (default false).
-  - response_format ('markdown' | 'json'): output format (default markdown).
-
-Returns JSON shape:
-  { "market": string, "count": number, "features": [ { "slug", "label", "url", "description"? } ] }`,
+  - include_descriptions (boolean): fetch each feature page's summary (default false).`,
       inputSchema: {
         market: marketField,
         include_descriptions: includeDescriptionsField,
         response_format: responseFormatField,
       },
+      outputSchema: featuresOutput,
       annotations: READONLY,
     },
-    async ({ market, include_descriptions, response_format }) => {
+    async ({ market, include_descriptions }) => {
       try {
         const m: Market = market ?? ctx.config.defaultMarket;
-        const base: CatalogEntry[] = FEATURE_SLUGS.map((slug) => ({
+        const base: CatalogEntry[] = slugsFor(m, "feature").map((slug) => ({
           slug,
-          label: FEATURE_LABELS[slug],
+          label: (FEATURE_LABELS as Record<string, string>)[slug] ?? titleCase(slug),
           url: `${SITE_ORIGIN}/${m}/features/${slug}`,
         }));
         const enriched = await enrich(ctx, base, include_descriptions);
-        const features = enriched.entries;
+        const features = tagged(enriched.entries, "raivatedu_list_features");
         const structured = {
           market: m,
           count: features.length,
@@ -159,7 +171,6 @@ Returns JSON shape:
           `RaivatEdu features (${m.toUpperCase()})`,
           features,
           structured,
-          response_format,
           enriched.note,
         );
       } catch (err) {
@@ -174,32 +185,29 @@ Returns JSON shape:
       title: "List RaivatEdu Solutions",
       description: `List the audience/solution segments RaivatEdu targets, each with its dedicated page URL.
 
-The four segments are Schools, Colleges & Universities, Coaching Institutes, and Training & EdTech. Use raivatedu_get_page_content on a returned URL for the full pitch tailored to that segment.
+The segments include Schools, Colleges & Universities, Coaching Institutes, and Training & EdTech. Use raivatedu_get_page_content on a returned URL for the full pitch tailored to that segment.
 
 Args:
   - market (optional): locale for the URLs (${MARKETS.join(", ")}); defaults to the configured market.
-  - include_descriptions (boolean): fetch each solution page's summary (default false).
-  - response_format ('markdown' | 'json'): output format (default markdown).
-
-Returns JSON shape:
-  { "market": string, "count": number, "solutions": [ { "slug", "label", "url", "description"? } ] }`,
+  - include_descriptions (boolean): fetch each solution page's summary (default false).`,
       inputSchema: {
         market: marketField,
         include_descriptions: includeDescriptionsField,
         response_format: responseFormatField,
       },
+      outputSchema: solutionsOutput,
       annotations: READONLY,
     },
-    async ({ market, include_descriptions, response_format }) => {
+    async ({ market, include_descriptions }) => {
       try {
         const m: Market = market ?? ctx.config.defaultMarket;
-        const base: CatalogEntry[] = SOLUTION_SLUGS.map((slug) => ({
+        const base: CatalogEntry[] = slugsFor(m, "solution").map((slug) => ({
           slug,
-          label: SOLUTION_LABELS[slug],
+          label: (SOLUTION_LABELS as Record<string, string>)[slug] ?? titleCase(slug),
           url: `${SITE_ORIGIN}/${m}/solutions/${slug}`,
         }));
         const enriched = await enrich(ctx, base, include_descriptions);
-        const solutions = enriched.entries;
+        const solutions = tagged(enriched.entries, "raivatedu_list_solutions");
         const structured = {
           market: m,
           count: solutions.length,
@@ -210,7 +218,6 @@ Returns JSON shape:
           `RaivatEdu solutions (${m.toUpperCase()})`,
           solutions,
           structured,
-          response_format,
           enriched.note,
         );
       } catch (err) {
@@ -229,41 +236,32 @@ The resource articles are practical pieces for education teams (e.g. first-respo
 
 Args:
   - market (optional): locale for the URLs (${MARKETS.join(", ")}); defaults to the configured market.
-  - include_descriptions (boolean): fetch each article's summary (default false).
-  - response_format ('markdown' | 'json'): output format (default markdown).
-
-Returns JSON shape:
-  {
-    "market": string,
-    "landing_pages": { "resources", "blog", "guides", "help" },
-    "count": number,
-    "articles": [ { "slug", "label", "url", "description"? } ]
-  }`,
+  - include_descriptions (boolean): fetch each article's summary (default false).`,
       inputSchema: {
         market: marketField,
         include_descriptions: includeDescriptionsField,
         response_format: responseFormatField,
       },
+      outputSchema: resourcesOutput,
       annotations: READONLY,
     },
-    async ({ market, include_descriptions, response_format }) => {
+    async ({ market, include_descriptions }) => {
       try {
         const m: Market = market ?? ctx.config.defaultMarket;
-        const base: CatalogEntry[] = RESOURCE_SLUGS.map((slug) => ({
+        const base: CatalogEntry[] = slugsFor(m, "resource-article").map((slug) => ({
           slug,
-          label: slug
-            .split("-")
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-            .join(" "),
+          label: titleCase(slug),
           url: `${SITE_ORIGIN}/${m}/resources/${slug}`,
         }));
         const enriched = await enrich(ctx, base, include_descriptions);
-        const articles = enriched.entries;
+        const articles = tagged(enriched.entries, "raivatedu_list_resources");
+        const landing = (path: string) =>
+          withUtm(`${SITE_ORIGIN}/${m}/${path}`, "raivatedu_list_resources");
         const landing_pages = {
-          resources: `${SITE_ORIGIN}/${m}/resources`,
-          blog: `${SITE_ORIGIN}/${m}/blog`,
-          guides: `${SITE_ORIGIN}/${m}/guides`,
-          help: `${SITE_ORIGIN}/${m}/help`,
+          resources: landing("resources"),
+          blog: landing("blog"),
+          guides: landing("guides"),
+          help: landing("help"),
         };
         const structured = {
           market: m,
@@ -291,7 +289,7 @@ Returns JSON shape:
           if (a.description) lines.push(`- ${a.description}`);
           lines.push("");
         }
-        return buildResult(lines.join("\n"), structured, response_format);
+        return buildResult(lines.join("\n"), structured);
       } catch (err) {
         return toToolError(err);
       }

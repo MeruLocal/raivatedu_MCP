@@ -55,7 +55,7 @@ export function registerPrompts(server: McpServer): void {
           "1. Call raivatedu_get_pricing to get current plans and prices for the market.",
           "2. Call raivatedu_list_solutions and identify the segment page that matches this institution type.",
           "3. Recommend a specific plan tier (justify it against the user-count bands) and link the matching solution page.",
-          "4. Mention the 14-day free trial and point to the demo/contact pages via raivatedu_get_contact_information.",
+          "4. Mention any free-trial terms that raivatedu_get_pricing reports (do not assume any), and point to the demo/contact pages via raivatedu_get_started.",
         ]
           .filter(Boolean)
           .join("\n"),
@@ -75,8 +75,8 @@ export function registerPrompts(server: McpServer): void {
         [
           `Compare RaivatEdu's pricing plans${market ? ` for the ${market} market` : ""}.`,
           "",
-          "Call raivatedu_get_pricing (response_format 'json') and present a clear table of plan, price, unit, user band and billing.",
-          "Then summarise which plan suits a small team vs a large multi-campus institution, and note the free trial.",
+          "Call raivatedu_get_pricing and present a clear table of plan, price, unit, user band and billing from its structured result.",
+          "Then summarise which plan suits a small team vs a large multi-campus institution, and mention any free-trial terms that raivatedu_get_pricing reports (do not assume any).",
         ].join("\n"),
       ),
   );

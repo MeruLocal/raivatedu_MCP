@@ -213,7 +213,7 @@ export class WebsiteClient {
         aborted
           ? `Request timed out after ${this.config.timeoutMs}ms`
           : `Network error: ${err instanceof Error ? err.message : String(err)}`,
-        { url, retryable: true },
+        { url, retryable: true, timedOut: aborted },
       );
     } finally {
       clearTimeout(timer);

@@ -9,9 +9,16 @@ import {
   ValidationError,
   WebsiteClientError,
 } from "../utils/errors.js";
-import { CATALOG, resolveToSafeUrl, type CatalogPage } from "../utils/url.js";
+import {
+  getCatalogState,
+  pagesForMarket,
+  resolveToSafeUrl,
+  type CatalogPage,
+} from "../utils/url.js";
 import { parsePage, type ParsedPage } from "../services/content-parser.js";
 import { buildResult, marketField, responseFormatField } from "./shared.js";
+import { withUtm } from "../utils/utm.js";
+import { listPagesOutput, pageContentOutput, searchOutput } from "./schemas.js";
 
 const READONLY = {
   readOnlyHint: true,
@@ -35,10 +42,6 @@ const SEARCHABLE_TYPES: ReadonlySet<CatalogPage["type"]> = new Set([
   "about",
   "resource-article",
 ]);
-
-function pagesForMarket(market: Market): CatalogPage[] {
-  return CATALOG.filter((p) => p.market === market || p.market === null);
-}
 
 /** Fixed search priority for pages whose path does not match the query. */
 const SEARCH_PRIORITY: readonly CatalogPage["type"][] = [
@@ -93,15 +96,11 @@ export function registerPageTools(server: McpServer, ctx: ServerContext): void {
       title: "List RaivatEdu Pages",
       description: `List the public pages available on RaivatEdu for a market — a navigation map of the site.
 
-Returns the verified set of pages (derived from the site's sitemap): home, pricing, enterprise, features (+ detail pages), solutions (+ detail pages), product, integrations, security, about, contact, demo, privacy, terms, resources, blog, guides, help, plus the global careers page. Feed any returned path to raivatedu_get_page_content.
+Returns the known public pages (from the site's live sitemap, refreshed daily, or the verified snapshot when the sitemap cannot be read; catalog_source says which): home, pricing, enterprise, features (+ detail pages), solutions (+ detail pages), product, integrations, security, about, contact, demo, privacy, terms, resources, blog, guides, help, plus the global careers page. Feed any returned path to raivatedu_get_page_content.
 
 Args:
   - market (optional): locale to list (${MARKETS.join(", ")}); defaults to the configured market.
-  - type (optional): filter to one page category (e.g. "feature", "solution", "resource-article").
-  - response_format ('markdown' | 'json'): output format (default markdown).
-
-Returns JSON shape:
-  { "market": string, "count": number, "pages": [ { "path", "url", "type", "market" } ] }`,
+  - type (optional): filter to one page category (e.g. "feature", "solution", "resource-article").`,
       inputSchema: {
         market: marketField,
         type: z
@@ -112,9 +111,10 @@ Returns JSON shape:
           ),
         response_format: responseFormatField,
       },
+      outputSchema: listPagesOutput,
       annotations: { ...READONLY, openWorldHint: false },
     },
-    async ({ market, type, response_format }) => {
+    async ({ market, type }) => {
       try {
         const m: Market = market ?? ctx.config.defaultMarket;
         let pages = pagesForMarket(m);
@@ -122,23 +122,26 @@ Returns JSON shape:
           const t = type.trim().toLowerCase();
           pages = pages.filter((p) => p.type === t);
         }
+        const state = getCatalogState();
         const structured = {
           market: m,
           count: pages.length,
+          catalog_source: state.source,
+          catalog_fetched_at: state.fetchedAt,
           pages: pages.map((p) => ({
             path: p.path,
-            url: p.url,
+            url: withUtm(p.url, "raivatedu_list_pages"),
             type: p.type,
             market: p.market,
           })),
         };
         const lines = [
           `# RaivatEdu pages — ${m.toUpperCase()}${type ? ` (type: ${type})` : ""}`,
-          `Found ${pages.length} pages.`,
+          `Found ${pages.length} pages (catalog: ${state.source}${state.fetchedAt ? `, fetched ${state.fetchedAt}` : ""}).`,
           "",
           ...pages.map((p) => `- [${p.type}] ${p.path}`),
         ];
-        return buildResult(lines.join("\n"), structured, response_format);
+        return buildResult(lines.join("\n"), structured);
       } catch (err) {
         return toToolError(err);
       }
@@ -160,17 +163,6 @@ Args:
   - path (string, required): page path or full raivatedu.com URL.
   - max_text_chars (number): cap on returned body text, 200–20000 (default 6000).
   - include_links (boolean): include the list of internal links (default true).
-  - response_format ('markdown' | 'json'): output format (default markdown).
-
-Returns JSON shape:
-  {
-    "url": string, "type": string, "title": string, "description": string,
-    "canonical": string | null,
-    "headings": [ { "level": number, "text": string } ],
-    "text": string,
-    "faqs": [ { "question": string, "answer": string } ],
-    "links": [ { "text": string, "url": string } ]
-  }
 
 Errors:
   - "not a known public RaivatEdu page" if the path is unknown — call raivatedu_list_pages.
@@ -193,16 +185,17 @@ Errors:
           .describe("Whether to include the page's internal links."),
         response_format: responseFormatField,
       },
+      outputSchema: pageContentOutput,
       annotations: READONLY,
     },
-    async ({ path, max_text_chars, include_links, response_format }) => {
+    async ({ path, max_text_chars, include_links }) => {
       try {
         const page = resolveToSafeUrl(path);
         const { body } = await ctx.client.get(page.url);
         const parsed: ParsedPage = parsePage(body, max_text_chars);
 
         const structured = {
-          url: page.url,
+          url: withUtm(page.url, "raivatedu_get_page_content"),
           type: page.type,
           title: parsed.title,
           description: parsed.description,
@@ -210,7 +203,12 @@ Errors:
           headings: parsed.headings,
           text: parsed.text,
           faqs: parsed.faqs,
-          links: include_links ? parsed.internalLinks : [],
+          links: include_links
+            ? parsed.internalLinks.map((l) => ({
+                text: l.text,
+                url: withUtm(l.url, "raivatedu_get_page_content"),
+              }))
+            : [],
         };
 
         const lines = [
@@ -218,7 +216,7 @@ Errors:
           "",
           parsed.description ? `> ${parsed.description}` : "",
           "",
-          `**URL:** ${page.url}  `,
+          `**URL:** ${structured.url}  `,
           `**Type:** ${page.type}`,
           "",
         ];
@@ -240,13 +238,13 @@ Errors:
             lines.push("");
           }
         }
-        if (include_links && parsed.internalLinks.length) {
-          lines.push(`## Links (${parsed.internalLinks.length})`);
-          for (const l of parsed.internalLinks.slice(0, 40)) {
+        if (include_links && structured.links.length) {
+          lines.push(`## Links (${structured.links.length})`);
+          for (const l of structured.links.slice(0, 40)) {
             lines.push(`- [${l.text}](${l.url})`);
           }
         }
-        return buildResult(lines.join("\n"), structured, response_format);
+        return buildResult(lines.join("\n"), structured);
       } catch (err) {
         return toToolError(err);
       }
@@ -266,14 +264,6 @@ Args:
   - query (string, required): 2–200 chars; words are matched case-insensitively.
   - market (optional): locale to search (${MARKETS.join(", ")}); defaults to the configured market.
   - limit (number): max results, 1–20 (default 5).
-  - response_format ('markdown' | 'json'): output format (default markdown).
-
-Returns JSON shape:
-  {
-    "query": string, "market": string, "pages_searched": number, "pages_failed": number,
-    "count": number, "note"?: string,
-    "results": [ { "title", "url", "type", "score": number, "snippet": string } ]
-  }
 
 Notes:
   - Searches the market's content-rich pages (pages whose path matches the query first); the operator may cap how many pages one search fetches. It does not crawl the entire site.
@@ -295,9 +285,10 @@ Notes:
           .describe("Maximum number of results to return (1–20)."),
         response_format: responseFormatField,
       },
+      outputSchema: searchOutput,
       annotations: READONLY,
     },
-    async ({ query, market, limit, response_format }) => {
+    async ({ query, market, limit }) => {
       try {
         const m: Market = market ?? ctx.config.defaultMarket;
         const terms = query
@@ -376,7 +367,7 @@ Notes:
             }
             return {
               title: parsed.title,
-              url: page.url,
+              url: withUtm(page.url, "raivatedu_search_content"),
               type: page.type,
               score,
               snippet: makeSnippet(parsed, terms),
@@ -413,7 +404,7 @@ Notes:
           if (r.snippet) lines.push(`- …${r.snippet}…`);
           lines.push("");
         }
-        return buildResult(lines.join("\n"), structured, response_format);
+        return buildResult(lines.join("\n"), structured);
       } catch (err) {
         return toToolError(err);
       }

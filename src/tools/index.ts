@@ -6,10 +6,15 @@ import { registerWebsiteTools } from "./website.js";
 import { registerPricingTools } from "./pricing.js";
 import { registerCatalogTools } from "./catalog.js";
 import { registerPageTools } from "./pages.js";
+import { usageEnabled, withUsageLogging } from "../utils/usage.js";
 
 export function registerAllTools(server: McpServer, ctx: ServerContext): void {
-  registerWebsiteTools(server, ctx);
-  registerPageTools(server, ctx);
-  registerPricingTools(server, ctx);
-  registerCatalogTools(server, ctx);
+  // Every tool gets timing + outcome usage records when enabled.
+  const target = usageEnabled(ctx.config, ctx.transport)
+    ? withUsageLogging(server, ctx.transport)
+    : server;
+  registerWebsiteTools(target, ctx);
+  registerPageTools(target, ctx);
+  registerPricingTools(target, ctx);
+  registerCatalogTools(target, ctx);
 }

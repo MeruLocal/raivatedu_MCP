@@ -8,6 +8,8 @@
  * straight from the sitemap. See README "Verified website capability analysis".
  */
 
+import { readFileSync } from "node:fs";
+
 /** Canonical host the site serves from (sitemap uses the www host). */
 export const CANONICAL_HOST = "www.raivatedu.com";
 
@@ -167,13 +169,33 @@ export interface RuntimeConfig {
   searchMaxPages: number;
   /** Maximum bytes read from one website response. */
   maxResponseBytes: number;
+  /**
+   * Usage records (one JSON line per tool call on stderr). undefined = the
+   * transport default (on for HTTP, off for stdio).
+   */
+  usageLog?: boolean;
 }
 
 /** Search cap applied on the anonymous HTTP transport unless overridden. */
 export const HTTP_DEFAULT_SEARCH_MAX_PAGES = 12;
 
 export const SERVER_NAME = "raivat-education-mcp-server";
-export const SERVER_VERSION = "1.0.0";
+/**
+ * Version, read from package.json at runtime so a version bump cannot leave
+ * the User-Agent, /version, /health or --version stale. Works from src/ (tsx,
+ * tests) and dist/ alike, since both sit one level below package.json.
+ */
+function readPackageVersion(): string {
+  try {
+    const raw = readFileSync(new URL("../package.json", import.meta.url), "utf8");
+    const v = (JSON.parse(raw) as { version?: unknown }).version;
+    return typeof v === "string" && v ? v : "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+export const SERVER_VERSION = readPackageVersion();
 
 const DEFAULT_USER_AGENT = `${SERVER_NAME}/${SERVER_VERSION} (+https://raivatedu.com; read-only MCP client)`;
 
@@ -229,7 +251,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig 
       64 * 1024,
       16 * 1024 * 1024,
     ),
+    usageLog: parseFlag(env.RAIVATEDU_USAGE_LOG),
   };
+}
+
+function parseFlag(raw: string | undefined): boolean | undefined {
+  const v = raw?.trim().toLowerCase();
+  if (!v) return undefined;
+  if (["0", "false", "off", "no"].includes(v)) return false;
+  if (["1", "true", "on", "yes"].includes(v)) return true;
+  return undefined;
 }
 
 /**

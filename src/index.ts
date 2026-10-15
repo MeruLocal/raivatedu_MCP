@@ -17,6 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { SERVER_NAME, SERVER_VERSION, loadConfig } from "./config.js";
 import { createServer } from "./server.js";
 import { runHttp } from "./http.js";
+import { sitemapRefreshMs, startSitemapRefresh } from "./services/sitemap.js";
 
 function printHelp(): void {
   process.stdout.write(
@@ -55,7 +56,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { server, logger } = createServer(config);
+  const { server, logger, context } = createServer(config);
+  // Background: replace the snapshot catalog with the live sitemap's.
+  startSitemapRefresh(context.client, logger, sitemapRefreshMs());
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
