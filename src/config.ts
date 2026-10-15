@@ -169,6 +169,11 @@ export interface RuntimeConfig {
   searchMaxPages: number;
   /** Maximum bytes read from one website response. */
   maxResponseBytes: number;
+  /**
+   * Usage records (one JSON line per tool call on stderr). undefined = the
+   * transport default (on for HTTP, off for stdio).
+   */
+  usageLog?: boolean;
 }
 
 /** Search cap applied on the anonymous HTTP transport unless overridden. */
@@ -246,7 +251,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig 
       64 * 1024,
       16 * 1024 * 1024,
     ),
+    usageLog: parseFlag(env.RAIVATEDU_USAGE_LOG),
   };
+}
+
+function parseFlag(raw: string | undefined): boolean | undefined {
+  const v = raw?.trim().toLowerCase();
+  if (!v) return undefined;
+  if (["0", "false", "off", "no"].includes(v)) return false;
+  if (["1", "true", "on", "yes"].includes(v)) return true;
+  return undefined;
 }
 
 /**

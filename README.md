@@ -332,6 +332,7 @@ All optional; the server runs with zero config. See `.env.example`.
 | `MCP_ALLOWED_ORIGINS` | `https://mcp.raivatedu.com,https://raivatedu.com,https://www.raivatedu.com` | HTTP only: browser origins allowed on `/mcp`. |
 | `MCP_RATE_LIMIT_PER_MIN` | `60` | HTTP only: requests per minute per IP (0 = off). |
 | `RAIVATEDU_SITEMAP_REFRESH_MS` | `86400000` | Rebuild the page catalog from the sitemap this often (0 = snapshot only). |
+| `RAIVATEDU_USAGE_LOG` | on for HTTP, off for stdio | One anonymous JSON line per tool call on stderr (`event: "tool_call"`: tool, client, transport, market, ok, errorKind, latencyMs). Never records queries, paths or IPs. `0` off, `1` on. |
 | `PUBLIC_BASE_URL` | `https://mcp.raivatedu.com` | HTTP only: public base URL advertised in discovery, `/` and `/version`. |
 | `TRUST_PROXY` | `0` | HTTP only: number of trusted proxy hops (0 = socket address; `true`/`1` = 1). The rate limit keys on the `X-Forwarded-For` entry that many hops from the right. Behind Cloudflare then Apache use `2`, or configure Apache `mod_remoteip` with Cloudflare's ranges and use `1`. `CF-Connecting-IP` is not trusted. |
 
@@ -343,7 +344,10 @@ All optional; the server runs with zero config. See `.env.example`.
 npm test          # offline unit + integration tests (mocked HTTP)
 npm run typecheck # tsc --noEmit
 RUN_SMOKE=1 npm test   # also runs optional live tests against raivatedu.com
+npm run check:versions # package.json and server.json versions match
 ```
+
+CI (`.github/workflows/ci.yml`) runs `npm ci`, typecheck, build, the offline tests, `check:versions` and `npm audit --omit=dev --audit-level=high` on every pull request and push to `main`.
 
 Coverage includes: config parsing, SSRF/path validation & catalog, HTML/JSON-LD parsing, the HTTP client (success, 404, 5xx retries, network errors, timeouts, host blocking), tool discovery, every tool's happy path, input validation, unknown-path & SSRF rejection, empty search results, and malformed-HTML/JSON-LD handling.
 
