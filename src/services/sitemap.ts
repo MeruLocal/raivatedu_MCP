@@ -39,6 +39,7 @@ const DETAIL_TYPES: Record<string, CatalogPage["type"]> = {
   features: "feature",
   solutions: "solution",
   resources: "resource-article",
+  glossary: "glossary-term",
 };
 
 export interface SitemapCatalog {

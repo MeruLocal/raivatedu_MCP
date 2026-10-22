@@ -82,6 +82,14 @@ export const MARKET_PAGES = [
   "blog",
   "guides",
   "help",
+  // Keyword landing pages and the glossary index. Present under every market
+  // (checked 2026-10-22); the live sitemap lists only some of them, so they
+  // are part of the snapshot too.
+  "school-management-software",
+  "admission-management-software",
+  "student-management-system",
+  "attendance-management-system",
+  "glossary",
 ] as const;
 
 /** Feature detail pages, from pages.xml (/features/<slug>). */
