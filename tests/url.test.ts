@@ -78,3 +78,42 @@ describe("resolveToSafeUrl (SSRF guard)", () => {
     expect(() => resolveToSafeUrl("file:///etc/passwd")).toThrow();
   });
 });
+
+describe("allowlist stays closed around the landing and glossary pages", () => {
+  it("accepts only the exact landing and glossary index paths", () => {
+    for (const p of [
+      "/in/school-management-software",
+      "/us/admission-management-software",
+      "/gb/student-management-system",
+      "/au/attendance-management-system",
+      "/sg/glossary",
+    ]) {
+      expect(lookupPath(p), p).toBeDefined();
+    }
+  });
+
+  it("ignores a port or query in a full URL and returns the canonical URL", () => {
+    expect(resolveToSafeUrl("https://www.raivatedu.com:8443/in/school-management-software?x=1").url).toBe(
+      "https://www.raivatedu.com/in/school-management-software",
+    );
+  });
+
+  it("rejects look-alikes, traversal, encoded separators and other hosts", () => {
+    for (const bad of [
+      "/in/school-management-software/extra",
+      "/in/school-management-softwares",
+      "/xx/school-management-software",
+      "/school-management-software",
+      "/in/glossary/../api/x",
+      "/in/school-management-software/../../api/leads",
+      "/in/glossary/%2e%2e/api",
+      "/in/glossary%2Fcbse",
+      "//evil.example/in/glossary",
+      "https://evil.example/in/school-management-software",
+      "https://www.raivatedu.com.evil.example/in/school-management-software",
+      "/api/in/school-management-software",
+    ]) {
+      expect(() => resolveToSafeUrl(bad), bad).toThrow(ValidationError);
+    }
+  });
+});
