@@ -50,6 +50,9 @@ export interface CatalogPage {
     | "guides"
     | "help"
     | "resource-article"
+    | "landing"
+    | "glossary-index"
+    | "glossary-term"
     | "careers";
   /** Market this page belongs to, or null for global pages. */
   market: Market | null;
@@ -73,6 +76,11 @@ export const PAGE_TYPE_BY_SLUG: Readonly<Record<string, CatalogPage["type"]>> = 
   blog: "blog",
   guides: "guides",
   help: "help",
+  "school-management-software": "landing",
+  "admission-management-software": "landing",
+  "student-management-system": "landing",
+  "attendance-management-system": "landing",
+  glossary: "glossary-index",
 };
 
 function buildCatalog(): CatalogPage[] {

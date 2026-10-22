@@ -10,9 +10,9 @@ import { ValidationError } from "../src/utils/errors.js";
 
 describe("page catalog", () => {
   it("contains the expected number of pages", () => {
-    // 10 markets * (17 market pages + 9 features + 4 solutions + 6 resources)
-    // = 10 * 36 = 360, plus 1 global careers page = 361.
-    expect(CATALOG.length).toBe(361);
+    // 10 markets * (22 market pages + 9 features + 4 solutions + 6 resources)
+    // = 10 * 41 = 410, plus 1 global careers page = 411.
+    expect(CATALOG.length).toBe(411);
   });
 
   it("includes market home, feature, solution and resource pages", () => {

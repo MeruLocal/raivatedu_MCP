@@ -165,8 +165,12 @@ describe("selectSearchCandidates", () => {
   it("puts a path match first and respects the cap", () => {
     const picked = selectSearchCandidates(inPages, ["attendance"], 5);
     expect(picked).toHaveLength(5);
-    expect(picked[0]!.path).toBe("/in/features/attendance");
-    expect(picked[1]!.type).toBe("home");
+    // Two pages match by path: the feature page and the attendance landing page.
+    expect(picked.slice(0, 2).map((p) => p.path).sort()).toEqual([
+      "/in/attendance-management-system",
+      "/in/features/attendance",
+    ]);
+    expect(picked[2]!.type).toBe("home");
   });
 
   it("does not match the market prefix itself", () => {
@@ -177,7 +181,7 @@ describe("selectSearchCandidates", () => {
 
   it("returns every searchable page when uncapped", () => {
     const all = selectSearchCandidates(inPages, ["zzz"], 0);
-    expect(all.length).toBe(28);
+    expect(all.length).toBe(32);
   });
 });
 
