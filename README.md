@@ -270,6 +270,11 @@ Maps a plain-language school/college/coaching need (admissions, enquiries, fees,
 - **Input**: `need` (3-300 chars), `market?`
 - **Output**: `{ market, need, matches:[{ topic, pages:[{ path, url }] }], fallback_pages[], check_limits_first }`
 
+### `raivatedu_get_limits`
+What RaivatEdu does **not** do and the known limits of live features, read live from the site's own `/llms.txt` ("Not built" and "Known limits" sections). Errors, rather than guessing, if the sections are absent. Use it before stating that RaivatEdu has a parent portal, exams/report cards, teacher logins, downloadable receipts or certificate verification.
+- **Input**: none
+- **Output**: `{ not_built:[{ item, reason? }], known_limits[], inventory_checked_on?, source_url }`
+
 ### `raivatedu_get_started`
 The next step for someone who wants to try or buy: UTM-tagged demo, contact and pricing links for a market. No network call; `signup_url` is `null` because no self-serve signup page is published.
 - **Input**: `market?`

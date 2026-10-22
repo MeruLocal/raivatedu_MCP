@@ -188,3 +188,13 @@ export const findPageOutput = {
     .boolean()
     .describe("True when the need mentions something the site lists as not built; call raivatedu_get_limits."),
 };
+
+export const limitsOutput = {
+  not_built: z.array(z.object({ item: z.string(), reason: z.string().optional() })),
+  known_limits: z.array(z.string()),
+  inventory_checked_on: z
+    .string()
+    .optional()
+    .describe("Date (YYYY-MM-DD) the site says its feature inventory was last checked."),
+  source_url: z.string(),
+};
