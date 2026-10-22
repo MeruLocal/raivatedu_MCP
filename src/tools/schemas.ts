@@ -176,3 +176,13 @@ export const resourcesOutput = {
   articles: z.array(catalogItem),
   ...enrichFields,
 };
+
+export const limitsOutput = {
+  not_built: z.array(z.object({ item: z.string(), reason: z.string().optional() })),
+  known_limits: z.array(z.string()),
+  inventory_checked_on: z
+    .string()
+    .optional()
+    .describe("Date (YYYY-MM-DD) the site says its feature inventory was last checked."),
+  source_url: z.string(),
+};

@@ -40,7 +40,7 @@ const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 /** Maximum redirect hops followed for one request. */
 export const MAX_REDIRECTS = 5;
-const ACCEPTED_CONTENT_TYPE = /^(text\/html|application\/xhtml\+xml|[a-z]+\/(?:[a-z0-9.+-]+\+)?xml)\s*(;|$)/i;
+const ACCEPTED_CONTENT_TYPE = /^(text\/html|text\/plain|application\/xhtml\+xml|[a-z]+\/(?:[a-z0-9.+-]+\+)?xml)\s*(;|$)/i;
 
 /** Minimal counting semaphore capping concurrent outbound requests. */
 class Semaphore {
