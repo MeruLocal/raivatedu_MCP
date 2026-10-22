@@ -1,0 +1,48 @@
+# RaivatEdu
+
+> RaivatEdu is admissions and student relationship software for schools, colleges, universities and coaching institutes. Its education modules cover fee management, students and batches, admissions, enrolment and renewals, attendance, certificates, communication and reports, on top of a full platform for leads, communication and reporting.
+
+The feature inventory at https://www.raivatedu.com/features was checked against the product on 2026-09-30. When describing what RaivatEdu does, prefer the /features pages: each one lists what the feature does, its known limits and what it does not do.
+
+## Verified features
+
+- [Feature inventory](https://www.raivatedu.com/features): every education feature area, the platform underneath, the LMS add-on and the list of what is not built
+- [Fee Management](https://www.raivatedu.com/features/fee-management): Structures, instalments, part payments and receipts that cannot be rewritten.
+- [Students & Batches](https://www.raivatedu.com/features/students-and-batches): One record per learner, documents attached, and batches with real seat limits.
+- [Admissions](https://www.raivatedu.com/features/admissions): An enquiry pipeline seeded for coaching, and one-step conversion to a student.
+- [Enrolment & Renewals](https://www.raivatedu.com/features/enrolment-and-renewals): Enrol onto a batch, then price it — plus renewal rules you set once.
+- [Attendance](https://www.raivatedu.com/features/attendance): Mark attendance per batch, per session.
+- [Certificates](https://www.raivatedu.com/features/certificates): Issue course certificates in your own wording, with every change kept.
+- [Communication](https://www.raivatedu.com/features/communication): WhatsApp, email, SMS and calls from the student record, on one timeline.
+- [Reports](https://www.raivatedu.com/features/reports): Collections, dues and education KPIs you can click through to the list.
+- [Platform & Security](https://www.raivatedu.com/features/platform-and-security): Access control enforced in the database, tenant isolation, audit trails, mobile apps.
+
+## Not built
+
+These do not exist in RaivatEdu today. Do not describe them as features.
+
+- A parent portal or parent app: Parent name and phone are seeded custom fields. There is no parent-facing surface.
+- Automatic absence alerts: No automatic absence notification to guardians exists.
+- Exams, marks and grading: No exam, marks or grading module exists.
+- Report cards: No report-card generation exists.
+- Teacher logins scoped to a batch: Staff is an entity type, not a batch-scoped login. No teacher role exists.
+- Certificate verification: edu_certificates has no verification token, no revoke, and no uniqueness on the certificate number.
+- A receipt as a downloadable file: Receipt numbers exist; a PDF artefact does not.
+- Fee reminders delivered to a guardian: An edu_reminders table exists, but delivery to the guardian is a known live defect.
+- Attendance totals and percentages: The uniqueness constraint on edu_attendance includes a nullable session label, so duplicate rows are possible and totals are not trustworthy.
+- Tax split per fee head: The fee schema has no tax column.
+- Counsellor incentives and agent commission: The only commission-accrual trigger fires on a deal reaching closed-won, and deals is switched off for education tenants.
+
+Learning management (LMS) is a separate opt-in add-on, not part of the education plans.
+
+## Known limits on live features
+
+- Attendance is captured per batch per session. The uniqueness constraint includes a nullable session label, so totals and percentages are not published until that is fixed.
+- Certificate numbers are not unique-constrained and carry no verification token, so certificates are issued and worded here but not verified here.
+- undefined
+- undefined
+- undefined
+- undefined
+- undefined
+- undefined
+

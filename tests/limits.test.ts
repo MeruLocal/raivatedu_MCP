@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -90,5 +91,38 @@ describe("raivatedu_get_limits", () => {
     const client = await connect();
     const res = await client.callTool({ name: "raivatedu_get_limits", arguments: {} });
     expect(res.isError).toBe(true);
+  });
+});
+
+describe("real llms.txt snapshot (2026-10-22)", () => {
+  const real = readFileSync(
+    new URL("./data/raivatedu-llms-2026-10-22.txt", import.meta.url),
+    "utf8",
+  );
+
+  it("keeps all 11 'Not built' items and both real limits, and no junk", () => {
+    const p = parseLlmsLimits(real)!;
+    expect(p.not_built.map((n) => n.item)).toEqual([
+      "A parent portal or parent app",
+      "Automatic absence alerts",
+      "Exams, marks and grading",
+      "Report cards",
+      "Teacher logins scoped to a batch",
+      "Certificate verification",
+      "A receipt as a downloadable file",
+      "Fee reminders delivered to a guardian",
+      "Attendance totals and percentages",
+      "Tax split per fee head",
+      "Counsellor incentives and agent commission",
+    ]);
+    expect(p.not_built.every((n) => n.reason)).toBe(true);
+    expect(p.known_limits).toHaveLength(2);
+    expect(p.inventory_checked_on).toBe("2026-09-30");
+    expect(JSON.stringify(p)).not.toMatch(/undefined/);
+  });
+
+  it("fails loudly if the count of 'Not built' bullets drops (parser or format change)", () => {
+    const broken = real.replace(/^- Exams, marks and grading:.*$/m, "");
+    expect(parseLlmsLimits(broken)!.not_built).toHaveLength(10);
   });
 });
