@@ -230,6 +230,20 @@ For local use set `PUBLIC_BASE_URL=http://localhost:3000` so discovery points at
 
 ---
 
+## Connect to the hosted server
+
+The hosted endpoint is `https://mcp.raivatedu.com/mcp` (Streamable HTTP, stateless, read-only, no API key). Ready-made snippets are in [`examples/`](./examples).
+
+| Client | How |
+| --- | --- |
+| Claude Code | `claude mcp add --transport http raivatedu https://mcp.raivatedu.com/mcp` |
+| Cursor | put `examples/cursor-mcp.json` in `~/.cursor/mcp.json` (or the project's `.cursor/mcp.json`) |
+| VS Code | put `examples/vscode-mcp.json` in `.vscode/mcp.json` |
+| Claude Desktop | `examples/claude-desktop-remote.json` (uses the `mcp-remote` bridge), or the local stdio setup above |
+| MCP Inspector | `npx @modelcontextprotocol/inspector --cli https://mcp.raivatedu.com/mcp --transport http --method tools/list` |
+
+Resources: `raivatedu://info`, `raivatedu://contact`, `raivatedu://limits`, `raivatedu://pages/{market}`, `raivatedu://pricing/{market}`, `raivatedu://glossary/{market}`. Prompts: `find_relevant_plan`, `compare_plans`, `summarize_page`, `navigate_website`, `check_capability`, `plan_admissions_workflow`, `explain_education_term`.
+
 ## MCP tool reference
 
 All tools are **read-only** (`readOnlyHint: true`) and declare an `outputSchema`; the object is in `structuredContent` and the text is markdown. The old `response_format` argument is still accepted but ignored. Markets: `in, us, gb, ca, au, nz, ie, sg, ae, za` (default `in`, configurable).

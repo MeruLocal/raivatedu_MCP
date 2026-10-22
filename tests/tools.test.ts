@@ -78,7 +78,7 @@ describe("tool discovery", () => {
   it("registers resources, templates and prompts", async () => {
     const { client } = await makeClient();
     expect((await client.listPrompts()).prompts.map((p) => p.name).sort()).toEqual(
-      ["compare_plans", "find_relevant_plan", "navigate_website", "summarize_page"],
+      ["check_capability", "compare_plans", "explain_education_term", "find_relevant_plan", "navigate_website", "plan_admissions_workflow", "summarize_page"],
     );
     const templates = (await client.listResourceTemplates()).resourceTemplates;
     expect(templates.map((t) => t.uriTemplate)).toContain("raivatedu://pricing/{market}");

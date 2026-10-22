@@ -22,6 +22,7 @@ import {
   parsePage,
 } from "../services/content-parser.js";
 import { withUtm } from "../utils/utm.js";
+import { parseLlmsLimits } from "../tools/limits.js";
 
 function jsonContents(uri: URL, data: unknown) {
   return {
@@ -120,6 +121,56 @@ export function registerResources(server: McpServer, ctx: ServerContext): void {
           url: withUtm(p.url, "raivatedu-pages"),
           type: p.type,
         })),
+      });
+    },
+  );
+
+  server.registerResource(
+    "raivatedu-limits",
+    "raivatedu://limits",
+    {
+      title: "What RaivatEdu does not do",
+      description:
+        "The site's own list of capabilities that are not built, and known limits of live features (read live from llms.txt).",
+      mimeType: "application/json",
+    },
+    async (uri) => {
+      const url = `${SITE_ORIGIN}/llms.txt`;
+      const { body } = await ctx.client.get(url);
+      const parsed = parseLlmsLimits(body);
+      if (!parsed) {
+        throw new Error("The site's feature inventory has no 'Not built' section right now.");
+      }
+      return jsonContents(uri, { ...parsed, source_url: url });
+    },
+  );
+
+  server.registerResource(
+    "raivatedu-glossary",
+    new ResourceTemplate("raivatedu://glossary/{market}", {
+      list: async () => ({
+        resources: MARKETS.map((code) => ({
+          uri: `raivatedu://glossary/${code}`,
+          name: `glossary-${code}`,
+          description: `Education glossary term pages for ${MARKET_INFO[code].name}`,
+          mimeType: "application/json",
+        })),
+      }),
+    }),
+    {
+      title: "RaivatEdu education glossary",
+      description:
+        "Glossary term pages (full forms and meanings) listed in the page catalog for a market.",
+      mimeType: "application/json",
+    },
+    async (uri, variables) => {
+      const m = marketParam(variables.market);
+      const terms = pagesForMarket(m).filter((p) => p.type === "glossary-term");
+      return jsonContents(uri, {
+        market: m,
+        count: terms.length,
+        index_url: withUtm(`${SITE_ORIGIN}/${m}/glossary`, "raivatedu-glossary"),
+        terms: terms.map((p) => ({ path: p.path, url: withUtm(p.url, "raivatedu-glossary") })),
       });
     },
   );

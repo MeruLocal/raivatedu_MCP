@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "raivatedu": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.raivatedu.com/mcp"]
+    }
+  }
+}

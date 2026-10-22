@@ -104,6 +104,77 @@ export function registerPrompts(server: McpServer): void {
   );
 
   server.registerPrompt(
+    "check_capability",
+    {
+      title: "Check whether RaivatEdu has a capability",
+      description:
+        "Answer 'does RaivatEdu do X?' from the site's own not-built list and feature pages, without over-claiming.",
+      argsSchema: {
+        capability: z
+          .string()
+          .describe("The capability asked about, e.g. 'parent portal', 'report cards'."),
+        market: marketArg,
+      },
+    },
+    ({ capability, market }) =>
+      userText(
+        [
+          `Does RaivatEdu offer: ${capability}?${market ? ` Market: ${market}.` : ""}`,
+          "",
+          "1. Call raivatedu_get_limits. If the capability (or something equivalent) is listed under not built or known limits, say so plainly and quote the site's reason.",
+          "2. Otherwise call raivatedu_find_page_for_need and raivatedu_get_page_content on the best page, and answer only from that page's text. If the page does not mention it, say the site does not state it; do not guess.",
+          "3. Cite the page URLs you used.",
+        ].join("\n"),
+      ),
+  );
+
+  server.registerPrompt(
+    "plan_admissions_workflow",
+    {
+      title: "Plan an admissions and enquiry workflow with RaivatEdu",
+      description:
+        "Map an institution's enquiry-to-enrolment process onto the RaivatEdu pages that cover each step.",
+      argsSchema: {
+        institution_type: z.string().describe("e.g. 'coaching institute', 'school', 'college'."),
+        pain_point: z
+          .string()
+          .optional()
+          .describe("e.g. 'enquiries tracked in spreadsheets', 'slow follow-up'."),
+        market: marketArg,
+      },
+    },
+    ({ institution_type, pain_point, market }) =>
+      userText(
+        [
+          `I run a ${institution_type}${pain_point ? ` and my problem is: ${pain_point}` : ""}. Show how RaivatEdu would cover enquiry to enrolment.${market ? ` Market: ${market}.` : ""}`,
+          "",
+          "Call raivatedu_find_page_for_need for admissions, fees, communication and (if relevant) attendance, then raivatedu_get_page_content on the top page of each. Call raivatedu_get_limits and list anything in my process the site says is not built. Give a step-by-step mapping with a page URL per step; use only what the pages state.",
+        ].join("\n"),
+      ),
+  );
+
+  server.registerPrompt(
+    "explain_education_term",
+    {
+      title: "Explain an education term from the RaivatEdu glossary",
+      description:
+        "Look up a full form or meaning (e.g. CBSE, RTE, NEP) in the RaivatEdu glossary pages.",
+      argsSchema: {
+        term: z.string().describe("The term or abbreviation, e.g. 'RTE', 'day scholar'."),
+        market: marketArg,
+      },
+    },
+    ({ term, market }) =>
+      userText(
+        [
+          `What does "${term}" mean?${market ? ` Market: ${market}.` : ""}`,
+          "",
+          "Use raivatedu_search_content for the term (glossary pages are included), then raivatedu_get_page_content on the matching glossary page. Answer from that page and cite its URL. If no glossary page matches, say so rather than answering from memory.",
+        ].join("\n"),
+      ),
+  );
+
+  server.registerPrompt(
     "navigate_website",
     {
       title: "Navigate the RaivatEdu website",
