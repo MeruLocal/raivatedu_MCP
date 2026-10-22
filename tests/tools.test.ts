@@ -47,13 +47,14 @@ describe("tool discovery", () => {
   beforeEach(() => installFetchMock());
   afterEach(() => vi.restoreAllMocks());
 
-  it("exposes all eleven tools with annotations and schemas", async () => {
+  it("exposes all twelve tools with annotations and schemas", async () => {
     const { client } = await makeClient();
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
       [
         "raivatedu_check_website_status",
+        "raivatedu_find_page_for_need",
         "raivatedu_get_contact_information",
         "raivatedu_get_page_content",
         "raivatedu_get_pricing",
