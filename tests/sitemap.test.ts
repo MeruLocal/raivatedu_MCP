@@ -72,6 +72,11 @@ describe("pageFromLoc", () => {
     expect(pageFromLoc(`${W}/in`)?.type).toBe("home");
     expect(pageFromLoc(`${W}/in/pricing/`)?.path).toBe("/in/pricing");
     expect(pageFromLoc(`${W}/us/features/new-thing`)?.type).toBe("feature");
+    expect(pageFromLoc(`${W}/in/school-management-software`)?.type).toBe("landing");
+    expect(pageFromLoc(`${W}/in/glossary`)?.type).toBe("glossary-index");
+    expect(pageFromLoc(`${W}/in/glossary/cbse-full-form`)?.type).toBe("glossary-term");
+    expect(pageFromLoc(`${W}/in/glossary/a/b`)).toBeNull();
+    expect(pageFromLoc(`${W}/in/not-a-landing-page`)).toBeNull();
     expect(pageFromLoc(`https://raivatedu.com/gb/resources/a-b-c`)?.url).toBe(`${W}/gb/resources/a-b-c`);
     expect(pageFromLoc(`${W}/careers`)?.market).toBeNull();
   });

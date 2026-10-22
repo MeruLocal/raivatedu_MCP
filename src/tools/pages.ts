@@ -40,7 +40,9 @@ const SEARCHABLE_TYPES: ReadonlySet<CatalogPage["type"]> = new Set([
   "integrations",
   "security",
   "about",
+  "landing",
   "resource-article",
+  "glossary-term",
 ]);
 
 /** Fixed search priority for pages whose path does not match the query. */
@@ -56,7 +58,9 @@ const SEARCH_PRIORITY: readonly CatalogPage["type"][] = [
   "about",
   "feature",
   "solution",
+  "landing",
   "resource-article",
+  "glossary-term",
 ];
 
 /**
