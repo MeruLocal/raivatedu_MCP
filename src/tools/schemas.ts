@@ -176,3 +176,15 @@ export const resourcesOutput = {
   articles: z.array(catalogItem),
   ...enrichFields,
 };
+
+const pagePick = z.object({ path: z.string(), url: z.string() });
+
+export const findPageOutput = {
+  market: z.string(),
+  need: z.string(),
+  matches: z.array(z.object({ topic: z.string(), pages: z.array(pagePick) })),
+  fallback_pages: z.array(pagePick).describe("Overview pages, only when no topic matched."),
+  check_limits_first: z
+    .boolean()
+    .describe("True when the need mentions something the site lists as not built; call raivatedu_get_limits."),
+};
