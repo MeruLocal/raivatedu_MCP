@@ -7,6 +7,7 @@ import { registerPricingTools } from "./pricing.js";
 import { registerCatalogTools } from "./catalog.js";
 import { registerPageTools } from "./pages.js";
 import { registerRecommendTools } from "./recommend.js";
+import { registerLimitsTools } from "./limits.js";
 import { usageEnabled, withUsageLogging } from "../utils/usage.js";
 
 export function registerAllTools(server: McpServer, ctx: ServerContext): void {
@@ -19,4 +20,5 @@ export function registerAllTools(server: McpServer, ctx: ServerContext): void {
   registerPricingTools(target, ctx);
   registerCatalogTools(target, ctx);
   registerRecommendTools(target, ctx);
+  registerLimitsTools(target, ctx);
 }

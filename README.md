@@ -230,6 +230,20 @@ For local use set `PUBLIC_BASE_URL=http://localhost:3000` so discovery points at
 
 ---
 
+## Connect to the hosted server
+
+The hosted endpoint is `https://mcp.raivatedu.com/mcp` (Streamable HTTP, stateless, read-only, no API key). Ready-made snippets are in [`examples/`](./examples).
+
+| Client | How |
+| --- | --- |
+| Claude Code | `claude mcp add --transport http raivatedu https://mcp.raivatedu.com/mcp` |
+| Cursor | put `examples/cursor-mcp.json` in `~/.cursor/mcp.json` (or the project's `.cursor/mcp.json`) |
+| VS Code | put `examples/vscode-mcp.json` in `.vscode/mcp.json` |
+| Claude Desktop | `examples/claude-desktop-remote.json` (uses the `mcp-remote` bridge), or the local stdio setup above |
+| MCP Inspector | `npx @modelcontextprotocol/inspector --cli https://mcp.raivatedu.com/mcp --transport http --method tools/list` |
+
+Resources: `raivatedu://info`, `raivatedu://contact`, `raivatedu://limits`, `raivatedu://pages/{market}`, `raivatedu://pricing/{market}`, `raivatedu://glossary/{market}`. Prompts: `find_relevant_plan`, `compare_plans`, `summarize_page`, `navigate_website`, `check_capability`, `plan_admissions_workflow`, `explain_education_term`.
+
 ## MCP tool reference
 
 All tools are **read-only** (`readOnlyHint: true`) and declare an `outputSchema`; the object is in `structuredContent` and the text is markdown. The old `response_format` argument is still accepted but ignored. Markets: `in, us, gb, ca, au, nz, ie, sg, ae, za` (default `in`, configurable).
@@ -255,6 +269,11 @@ Published contact emails + contact/demo page URLs (does **not** send anything).
 Maps a plain-language school/college/coaching need (admissions, enquiries, fees, attendance, certificates, WhatsApp follow-up, pricing, vocabulary) to the RaivatEdu page that covers it: market-prefixed, UTM-tagged canonical URLs. Deterministic keyword routing; returns only pages present in the page catalog. `check_limits_first` is true when the need touches something the site lists as not built (call `raivatedu_get_limits`).
 - **Input**: `need` (3-300 chars), `market?`
 - **Output**: `{ market, need, matches:[{ topic, pages:[{ path, url }] }], fallback_pages[], check_limits_first }`
+
+### `raivatedu_get_limits`
+What RaivatEdu does **not** do and the known limits of live features, read live from the site's own `/llms.txt` ("Not built" and "Known limits" sections). Errors, rather than guessing, if the sections are absent. Use it before stating that RaivatEdu has a parent portal, exams/report cards, teacher logins, downloadable receipts or certificate verification.
+- **Input**: none
+- **Output**: `{ not_built:[{ item, reason? }], known_limits[], inventory_checked_on?, source_url }`
 
 ### `raivatedu_get_started`
 The next step for someone who wants to try or buy: UTM-tagged demo, contact and pricing links for a market. No network call; `signup_url` is `null` because no self-serve signup page is published.

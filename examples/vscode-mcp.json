@@ -1,0 +1,5 @@
+{
+  "servers": {
+    "raivatedu": { "type": "http", "url": "https://mcp.raivatedu.com/mcp" }
+  }
+}
