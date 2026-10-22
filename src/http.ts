@@ -11,6 +11,8 @@
  *   GET  /health               – liveness probe: {"status":"ok"}
  *   GET  /version              – name, version, live tool/resource/prompt counts, mcp_endpoint
  *   GET  /.well-known/mcp.json – discovery document (public base URL from PUBLIC_BASE_URL)
+ *   GET  /.well-known/mcp/server-card.json – server card (what it is, how to connect)
+ *   GET  /llms.txt             – plain-text description for assistants (tool list generated live)
  *   GET  /                     – human-friendly status page
  */
 
@@ -130,7 +132,9 @@ export function statusPage(baseUrl: string): string {
   account actions. Never send credentials here.</p>
 
   <p>Health: <a href="/health">/health</a> &middot; Version: <a href="/version">/version</a>
-  &middot; Discovery: <a href="/.well-known/mcp.json">/.well-known/mcp.json</a></p>
+  &middot; Discovery: <a href="/.well-known/mcp.json">/.well-known/mcp.json</a>
+  &middot; <a href="/.well-known/mcp/server-card.json">Server card</a>
+  &middot; <a href="/llms.txt">llms.txt</a></p>
 </body></html>`;
 }
 
@@ -152,6 +156,66 @@ export function discoveryDoc(baseUrl: string) {
     readOnly: true,
     documentation: "https://www.raivatedu.com",
   };
+}
+
+/**
+ * Server card at /.well-known/mcp/server-card.json (draft MCP server-card
+ * convention): what the server is and how to connect, with no tool list
+ * (tools/list stays the single source).
+ */
+export function serverCard(baseUrl: string) {
+  return {
+    serverInfo: {
+      name: SERVER_NAME,
+      title: "RaivatEdu MCP Server",
+      version: SERVER_VERSION,
+    },
+    description:
+      "Read-only access to the public RaivatEdu website (admissions and education CRM software for schools, colleges, coaching institutes and training teams): pricing per market, features, solutions, resource articles, what is not built, contact and page content.",
+    transport: { type: "streamable-http", endpoint: `${baseUrl}/mcp` },
+    authentication: { required: false },
+    capabilities: { tools: {}, resources: {}, prompts: {} },
+    documentation: "https://github.com/MeruLocal/raivatedu_MCP#readme",
+    repository: "https://github.com/MeruLocal/raivatedu_MCP",
+    websiteUrl: "https://www.raivatedu.com",
+  };
+}
+
+/**
+ * Plain-text /llms.txt for assistants that read the MCP host itself. Tool
+ * names and titles are passed in from a live tools/list so this cannot drift
+ * from what the server registers.
+ */
+export function llmsTxt(
+  baseUrl: string,
+  tools: { name: string; title?: string }[],
+): string {
+  return [
+    "# RaivatEdu MCP Server",
+    "",
+    "> Read-only Model Context Protocol server for the public RaivatEdu website (https://www.raivatedu.com): admissions and student-relationship software for schools, colleges, coaching institutes and training teams. No API key; it holds no customer data and performs no account actions.",
+    "",
+    `Connect any MCP client to the Streamable HTTP endpoint ${baseUrl}/mcp (HTTP POST, stateless).`,
+    "",
+    "## Tools",
+    "",
+    ...tools.map((t) => `- ${t.name}${t.title ? `: ${t.title}` : ""}`),
+    "",
+    "## Good for",
+    "",
+    "- Plans and prices per market, read from the site's own structured data",
+    "- Which RaivatEdu feature or page answers a school, college or coaching-institute workflow (admissions, fees, attendance, certificates, communication)",
+    "- What RaivatEdu does not do (raivatedu_get_limits), so answers do not over-claim",
+    "- Contact and demo links",
+    "",
+    "## Links",
+    "",
+    "- [Server card](" + baseUrl + "/.well-known/mcp/server-card.json)",
+    "- [Discovery document](" + baseUrl + "/.well-known/mcp.json)",
+    "- [Source and README](https://github.com/MeruLocal/raivatedu_MCP)",
+    "- [RaivatEdu website](https://www.raivatedu.com)",
+    "",
+  ].join("\n");
 }
 
 export interface ServerCounts {
@@ -184,6 +248,25 @@ export async function countRegistrations(
       resource_templates: templates.resourceTemplates.length,
       prompts: prompts.prompts.length,
     };
+  } finally {
+    await client.close();
+    await server.close();
+  }
+}
+
+/** Tool names and titles as a client would see them over tools/list. */
+export async function listToolSummaries(
+  config: RuntimeConfig,
+  websiteClient?: WebsiteClient,
+): Promise<{ name: string; title?: string }[]> {
+  const { server } = createServer(config, websiteClient);
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverSide);
+  const client = new Client({ name: `${SERVER_NAME}-self-list`, version: SERVER_VERSION });
+  await client.connect(clientSide);
+  try {
+    const { tools } = await client.listTools();
+    return tools.map((t) => ({ name: t.name, title: t.title }));
   } finally {
     await client.close();
     await server.close();
@@ -235,6 +318,20 @@ export function createHttpApp(
     // Public metadata with no credentials: readable by browser inspectors.
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.json(discoveryDoc(baseUrl));
+  });
+
+  app.get("/.well-known/mcp/server-card.json", (_req: Request, res: Response) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.json(serverCard(baseUrl));
+  });
+
+  app.get("/llms.txt", async (_req: Request, res: Response) => {
+    try {
+      const tools = await listToolSummaries(config, client);
+      res.type("text/plain; charset=utf-8").send(llmsTxt(baseUrl, tools));
+    } catch {
+      res.status(503).type("text/plain").send("Temporarily unavailable.\n");
+    }
   });
 
   app.get("/", (_req: Request, res: Response) => {

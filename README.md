@@ -172,6 +172,8 @@ PORT=3100 npm run start:http       # PORT defaults to 3000
 | `GET /health` | Liveness: `{"status":"ok"}`. |
 | `GET /version` | Name, version, live tool/resource/prompt counts and `mcp_endpoint`. |
 | `GET /.well-known/mcp.json` | Discovery document. Its endpoint comes from `PUBLIC_BASE_URL` (default `https://mcp.raivatedu.com`). |
+| `GET /.well-known/mcp/server-card.json` | Server card: name, title, version, transport endpoint, no auth, repository. |
+| `GET /llms.txt` | Plain-text description for assistants; the tool list is generated from `tools/list`. |
 | `GET /` | Status page. |
 
 Try it with the MCP Inspector CLI:

@@ -117,3 +117,48 @@ describe("single-source version", () => {
     expect(sj.packages).toBeUndefined();
   });
 });
+
+describe("server card and llms.txt", () => {
+  let base: string;
+  let server: Server;
+  beforeAll(async () => {
+    resetSharedWebsiteClient();
+    const app = createHttpApp(
+      loadConfig({ RAIVATEDU_LOG_LEVEL: "silent" }),
+      { ...loadHttpSecurityConfig({}), rateLimitPerMin: 0 },
+      "https://mcp.raivatedu.com",
+    );
+    await new Promise<void>((resolve) => {
+      server = app.listen(0, "127.0.0.1", () => resolve());
+    });
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(() => server.close());
+
+  it("serves a server card pointing at the public /mcp URL with no auth", async () => {
+    const r = await fetch(`${base}/.well-known/mcp/server-card.json`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("access-control-allow-origin")).toBe("*");
+    const card = await r.json();
+    expect(card.serverInfo.version).toBe(pkg.version);
+    expect(card.transport.endpoint).toBe("https://mcp.raivatedu.com/mcp");
+    expect(card.authentication.required).toBe(false);
+    expect(JSON.stringify(card)).not.toContain("localhost");
+  });
+
+  it("serves llms.txt as text/plain with every registered tool", async () => {
+    const r = await fetch(`${base}/llms.txt`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toMatch(/^text\/plain/);
+    const text = await r.text();
+    const { server: mcp } = createServer(loadConfig({ RAIVATEDU_LOG_LEVEL: "silent" }));
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    await mcp.connect(st);
+    const client = new Client({ name: "t", version: "1" });
+    await client.connect(ct);
+    const { tools } = await client.listTools();
+    for (const t of tools) expect(text).toContain(t.name);
+    expect(text).toContain("https://mcp.raivatedu.com/mcp");
+    expect(text).not.toMatch(/undefined|localhost/);
+  });
+});
