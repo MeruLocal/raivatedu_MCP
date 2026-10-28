@@ -1,0 +1,9 @@
+{
+  "name": "raivat-education",
+  "description": "Read-only MCP access to public raivatedu.com website content: pages, website status, pricing, contact and company info.",
+  "version": "1.0.0",
+  "homepage": "https://github.com/MeruLocal/raivatedu_MCP",
+  "repository": "https://github.com/MeruLocal/raivatedu_MCP",
+  "license": "MIT",
+  "keywords": ["mcp", "read-only", "website", "raivat-education"]
+}

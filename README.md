@@ -374,6 +374,26 @@ Once connected in Claude Desktop you can ask:
 
 ---
 
+## Use as a plugin
+
+This repo ships an Open Plugins component at [`.mcp.json`](./.mcp.json), so any
+MCP client that reads plugin repos can pick the server up directly. It points at
+the hosted, read-only endpoint:
+
+```json
+{
+  "mcpServers": {
+    "raivat-education": {
+      "type": "http",
+      "url": "https://mcp.raivatedu.com/mcp"
+    }
+  }
+}
+```
+
+No API key is required — the server holds no customer data and performs no write
+actions. To run it yourself instead, see the stdio and HTTP instructions above.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE). Independent/unofficial; "RaivatEdu" marks belong to RaivatEdu Technologies Pvt. Ltd. Not affiliated or endorsed.
