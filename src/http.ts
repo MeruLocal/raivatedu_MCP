@@ -28,6 +28,18 @@ const JSON_RPC_METHOD_NOT_ALLOWED = {
   id: null,
 };
 
+/**
+ * True when the request looks like a browser navigating to the URL rather than a
+ * client speaking the protocol. `Sec-Fetch-*` are sent by current browsers; the
+ * Accept check covers older ones and excludes a genuine SSE stream request.
+ */
+function isBrowserNavigation(headers: Request["headers"]): boolean {
+  if (headers["sec-fetch-mode"] === "navigate") return true;
+  if (headers["sec-fetch-dest"] === "document") return true;
+  const accept = String(headers.accept ?? "");
+  return accept.includes("text/html") && !accept.includes("text/event-stream");
+}
+
 function statusPage(): string {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8" />
@@ -149,8 +161,15 @@ export async function runHttp(
     }
   };
 
-  const methodNotAllowed = (_req: Request, res: Response) =>
-    res.status(405).json(JSON_RPC_METHOD_NOT_ALLOWED);
+  // A browser address bar sends GET, so show the status page rather than a bare
+  // JSON-RPC error; real clients get a 405 that names the method to use.
+  const methodNotAllowed = (req: Request, res: Response) => {
+    if (req.method === "GET" && isBrowserNavigation(req.headers)) {
+      res.type("html").send(statusPage());
+      return;
+    }
+    res.set("Allow", "POST").status(405).json(JSON_RPC_METHOD_NOT_ALLOWED);
+  };
 
   app.post("/mcp", handleMcp);
   // Session-based GET/DELETE are not supported in stateless mode.
